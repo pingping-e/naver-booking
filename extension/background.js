@@ -4,7 +4,7 @@ let queue = Promise.resolve();
 function serialized(fn) { const result = queue.then(fn); queue = result.catch(() => {}); return result; }
 async function log(message) {
   const {logs = []} = await chrome.storage.local.get('logs');
-  await chrome.storage.local.set({logs: [{at: new Date().toISOString(), message}, ...logs].slice(0, 5)});
+  await chrome.storage.local.set({logs: [{at: new Date().toISOString(), message}, ...logs].slice(0, 10)});
 }
 async function stop(reason) {
   await chrome.alarms.clear(ALARM);
@@ -12,20 +12,14 @@ async function stop(reason) {
   if (job) await chrome.storage.local.set({job: {...job, active: false, status: reason}});
   await log(reason);
 }
-async function refresh(job, dateIndex = 0) {
+async function refresh(job) {
   await chrome.alarms.clear(ALARM);
-  const refreshed = {...job, scanId: crypto.randomUUID(), checkStartedAt: Date.now(), nextCheckAt: null};
+  const date = job.dates?.[0] ?? job.date;
+  const url = new URL(job.url);url.searchParams.set('startDate', date);
+  const refreshed = {...job, dateIndex: 0, date, url: url.href, scanId: crypto.randomUUID(), checkStartedAt: Date.now(), nextCheckAt: null, status: `감시 중: ${date} (1/${job.dates?.length ?? 1})`};
   try {
-    if (job.dates?.length > 1) {
-      const date = job.dates[dateIndex];
-      const url = new URL(job.url);
-      url.searchParams.set('startDate', date);
-      await chrome.storage.local.set({job: {...refreshed, dateIndex, date, url: url.href, status: `감시 중: ${date} (${dateIndex + 1}/${job.dates.length})`}});
-      await chrome.tabs.update(job.tabId, {url: url.href});
-    } else {
-      await chrome.storage.local.set({job: refreshed});
-      await chrome.tabs.reload(job.tabId);
-    }
+    await chrome.storage.local.set({job: refreshed});
+    await chrome.tabs.reload(job.tabId);
     return true;
   } catch {
     await stop('새로고침 또는 날짜 전환 실패 — 탭을 확인하고 다시 시작하세요.');
@@ -36,7 +30,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
   serialized(async () => {
     if (msg.type === 'PRUNE_LOGS') {
       const {logs = []} = await chrome.storage.local.get('logs');
-      if (logs.length > 5) await chrome.storage.local.set({logs: logs.slice(0, 5)});
+      if (logs.length > 10) await chrome.storage.local.set({logs: logs.slice(0, 10)});
     } else if (msg.type === 'CONTEXT') {
       const {job} = await chrome.storage.local.get('job');
       return {ok: true, job: sender.tab?.id === job?.tabId ? job : null};
@@ -64,10 +58,17 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
     } else if (msg.type === 'SCHEDULE') {
       const {job} = await chrome.storage.local.get('job');
       if (!job?.active || job.phase !== 'watching' || job.id !== msg.id || job.date !== msg.date || job.scanId !== msg.scanId || sender.tab?.id !== job.tabId) return {ok: false};
+      const current = new URL(sender.tab.url), expected = new URL(job.url);
+      if (current.origin !== expected.origin || current.pathname !== expected.pathname) {
+        await stop('다른 화면으로 이동하여 감시 중지');return {ok: false};
+      }
       if (job.nextCheckAt) return {ok: true, nextCheckAt: job.nextCheckAt};
       if ((job.dateIndex ?? 0) < (job.dates?.length ?? 1) - 1) {
-        await refresh(job, (job.dateIndex ?? 0) + 1);
-        return {ok: false}; // The next document continues this round without a timer.
+        const dateIndex = (job.dateIndex ?? 0) + 1;
+        const date = job.dates[dateIndex];
+        const nextJob = {...job, dateIndex, date, scanId: crypto.randomUUID(), nextCheckAt: null, status: `감시 중: ${date} (${dateIndex + 1}/${job.dates.length})`};
+        await chrome.storage.local.set({job: nextJob});
+        return {ok: true, nextJob}; // Continue selecting dates in the same document.
       }
       const seconds = nextInterval(job.intervalMin ?? job.interval, job.intervalMax ?? job.interval);
       const delay = seconds * 1000;

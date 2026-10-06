@@ -164,9 +164,9 @@ document.querySelector('#save-fields').addEventListener('click',async()=>{
 });
 async function render() {
   const {job, logs = []} = await chrome.storage.local.get(['job', 'logs']);
-  if (logs.length > 5) await chrome.runtime.sendMessage({type: 'PRUNE_LOGS'});
+  if (logs.length > 10) await chrome.runtime.sendMessage({type: 'PRUNE_LOGS'});
   status.textContent = job?.status || '대기 중';
-  document.querySelector('#logs').replaceChildren(...logs.slice(0, 5).map(entry => {
+  document.querySelector('#logs').replaceChildren(...logs.slice(0, 10).map(entry => {
     const li = document.createElement('li'); li.textContent = `${new Date(entry.at).toLocaleTimeString()} ${entry.message}`; return li;
   }));
 }

@@ -1,5 +1,4 @@
-(async () => {
-  const {job} = await chrome.runtime.sendMessage({type: 'CONTEXT'});
+async function checkBookingDate(job) {
   if (!job?.active || !['watching', 'booking'].includes(job.phase)) return;
   const expected = new URL(job.url);
   const requestPath = `${expected.pathname.replace(/\/$/, '')}/request`;
@@ -45,7 +44,7 @@
       if (location.pathname === requestPath) await finishRequest();
       return;
     }
-    await new Promise(r => setTimeout(r, 1500));
+    if (!await active()) return;
     if (/로그인이 필요|로그인해 주세요|자동입력 방지|캡차/.test(document.body.innerText)) { await send('RESULT', {message: '로그인 또는 인증이 필요합니다. 직접 처리 후 다시 시작하세요.'}); return; }
     const dateSelector = job.dateSelector?.replaceAll('{date}', job.date).replaceAll('{day}', String(Number(job.date.slice(-2)))) || `[data-date="${job.date}"], [aria-label="${job.date}"]`;
     let date = await wait(() => pick(dateSelector) || (!job.dateSelector && document.querySelector('.calendar_title')));
@@ -121,7 +120,9 @@
   } catch (error) { await send('RESULT', {message: `안전 중지: ${error.message}`}); }
   finally {
     const schedule = await send('SCHEDULE').catch(() => null);
-    if (schedule?.ok) {
+    if (schedule?.ok && schedule.nextJob) {
+      await checkBookingDate(schedule.nextJob);
+    } else if (schedule?.ok && schedule.nextCheckAt) {
       const recheck = async () => {
         const remaining = schedule.nextCheckAt - Date.now();
         if (remaining > 0) { setTimeout(recheck, remaining);return; }
@@ -130,4 +131,8 @@
       setTimeout(recheck, Math.max(0, schedule.nextCheckAt - Date.now()));
     }
   }
+}
+(async () => {
+  const {job} = await chrome.runtime.sendMessage({type: 'CONTEXT'});
+  await checkBookingDate(job);
 })();

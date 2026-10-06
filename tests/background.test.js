@@ -47,10 +47,11 @@ test('short-interval refresh validates job and tab before reloading', async () =
 test('all dates run in priority order before waiting; each new round starts at first date', async () => {
  const dates=['2026-10-16','2026-10-23','2026-10-30'];
  state.job={id:'multi',scanId:'first',tabId:7,active:true,phase:'watching',dates,date:dates[0],dateIndex:0,url:'https://m.booking.naver.com/booking/1?startDate='+dates[0],intervalMin:5,intervalMax:5};
- const beforeAlarms=alarms.length, beforeUpdates=updates.length;
+ const beforeAlarms=alarms.length, beforeUpdates=updates.length, beforeReloads=reloads;
  const firstScan=state.job.scanId;
  assert.equal((await message({type:'RECHECK',id:'multi',date:dates[0]})).ok,false);
- assert.equal((await message({type:'SCHEDULE',id:'multi',date:dates[0]})).ok,false);
+ const next = await message({type:'SCHEDULE',id:'multi',date:dates[0]});
+ assert.equal(next.ok,true);assert.equal(next.nextJob.date,dates[1]);
  assert.equal(state.job.date,dates[1]);
  assert.equal(state.job.nextCheckAt,null);
  assert.equal(alarms.length,beforeAlarms);
@@ -58,7 +59,7 @@ test('all dates run in priority order before waiting; each new round starts at f
  assert.equal((await message({type:'CLAIM',id:'multi',date:dates[0]})).ok,false);
  await message({type:'SCHEDULE',id:'multi',date:dates[1]});
  assert.equal(state.job.date,dates[2]);
- assert.equal(alarms.length,beforeAlarms);
+ assert.equal(alarms.length,beforeAlarms);assert.equal(updates.length,beforeUpdates);assert.equal(reloads,beforeReloads);
  const started=Date.now();
  const scheduled=await message({type:'SCHEDULE',id:'multi',date:dates[2],elapsedMs:100000});
  assert.equal(scheduled.ok,true);
@@ -68,7 +69,7 @@ test('all dates run in priority order before waiting; each new round starts at f
  state.job.nextCheckAt=Date.now()-1;
  await alarmListener({name:'booking-watch'});
  assert.equal(state.job.date,dates[0]);assert.equal(state.job.dateIndex,0);
- assert.deepEqual(updates.slice(beforeUpdates).map(entry=>new URL(entry.url).searchParams.get('startDate')),[dates[1],dates[2],dates[0]]);
+ assert.equal(updates.length,beforeUpdates);assert.equal(reloads,beforeReloads+1);
  assert.equal((await message({type:'CLAIM',id:'multi',date:dates[0]})).ok,true);
  const count=updates.length;
  assert.equal((await message({type:'SCHEDULE',id:'multi',date:dates[0]})).ok,false);
@@ -132,13 +133,13 @@ test('initial navigation errors stop the new job and return a failure', async ()
  assert.match(state.job.status,/예약 페이지 열기 실패/);
 });
 
- test('logs discard older entries and keep only the latest five', async () => {
+ test('logs discard older entries and keep only the latest ten', async () => {
  state.logs=Array.from({length:60},(_,i)=>({at:'2026-10-06T00:00:00Z',message:`old ${i}`}));
  await message({type:'PRUNE_LOGS'});
- assert.equal(state.logs.length,5);assert.equal(state.logs[0].message,'old 0');
+ assert.equal(state.logs.length,10);assert.equal(state.logs[0].message,'old 0');
  await message({type:'STOP'});
- assert.equal(state.logs.length,5);assert.equal(state.logs[0].message,'사용자 중지');
- assert.deepEqual(state.logs.slice(1).map(entry=>entry.message),['old 0','old 1','old 2','old 3']);
+ assert.equal(state.logs.length,10);assert.equal(state.logs[0].message,'사용자 중지');
+ assert.deepEqual(state.logs.slice(1).map(entry=>entry.message),Array.from({length:9},(_,i)=>`old ${i}`));
  for(let i=0;i<7;i++) await message({type:'STOP'});
- assert.equal(state.logs.length,5);
+ assert.equal(state.logs.length,10);
  });
