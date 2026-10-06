@@ -35,8 +35,8 @@ export function validate(input) {
     intervalMin = intervalMax = interval;
   }
   const interval = intervalMin;
-  const treatment = input.treatment?.trim() || '필러';
-  const source = input.source?.trim() || '유튜브';
+  const treatment = input.treatment?.trim() || '제모';
+  const source = input.source?.trim() || '네이버 검색';
   const scope = url.origin + url.pathname.replace(/\/$/, '');
   const formPreferences = input.formPreferences?.scope === scope ? input.formPreferences : null;
   if (formPreferences && (!Array.isArray(formPreferences.fields) || formPreferences.fields.length > 50)) throw new Error('필수 입력 설정을 다시 불러오세요.');

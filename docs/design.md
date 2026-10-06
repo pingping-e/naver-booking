@@ -33,7 +33,7 @@ Chrome 알람은 절전·탭 정지에 의해 늦어질 수 있어 정확한 초
 ## 0.1.4: 필수 입력 프로필과 신청 페이지
 최종 신청 화면의 `.booking_inner .form_title`에 `.necessary_text`가 있는 그룹과 HTML required/aria-required 입력을 발견한다. 항목 이름 기반 키, 타입, 옵션 값/라벨, 현재 입력값을 팝업에 제공한다. 비밀번호·파일 업로드 및 구분할 수 없는 필드는 거부한다. 필수 항목 이름이 중복되거나 값/타입이 바뀌면 재설정을 요구한다. 체크박스·라디오·일반 select·텍스트 계열과 textarea를 지원하며 복수 select 및 혼합 그룹은 직접 입력 대상이다.
 
-프로필은 `origin + 상품 경로`별로 storage.local의 formProfiles에 보관한다. 실행할 때 해당 상품의 프로필만 job에 복사한다. 변경된 필수 항목이나 선택 불가 옵션은 대체값 없이 중지한다. React 입력은 네이티브 value setter 및 input/change 이벤트, 체크박스는 label click으로 반영하고 결과를 검사한다. 원래 참고 상품은 저장한 일반 프로필이 없을 때 필러/유튜브 기본값을 적용한다.
+프로필은 `origin + 상품 경로`별로 storage.local의 formProfiles에 보관한다. 실행할 때 해당 상품의 프로필만 job에 복사한다. 변경된 필수 항목이나 선택 불가 옵션은 대체값 없이 중지한다. React 입력은 네이티브 value setter 및 input/change 이벤트, 체크박스는 label click으로 반영하고 결과를 검사한다. 원래 참고 상품은 저장한 일반 프로필이 없을 때 제모/네이버 검색 기본값을 적용한다.
 
 watching → booking → submitting → 종료 상태다. CLAIM에서 선택 시간도 저장한다. request 페이지는 탭, 작업 ID, 날짜, origin/경로를 검증하며 URL의 startDateTime이 있으면 선택 시간과도 비교한다. 자동 확정은 FINAL_CLAIM으로 submitting 상태를 원자적으로 저장한 후 버튼을 1회 누른다. 새 문서는 submitting 상태를 재실행하지 않는다. 페이지 이동 때문에 종료 메시지를 보내지 못해도 자동 재제출하지 않는다. 최종 클릭은 접수 성공으로 간주하지 않는다.
 

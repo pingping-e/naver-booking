@@ -23,7 +23,7 @@
     if (!formReady) throw new Error('추가정보 또는 예약 신청 버튼을 찾지 못했습니다. 화면을 직접 확인하세요.');
     const scope = expected.origin + expected.pathname.replace(/\/$/, '');
     const preferences = job.formPreferences?.scope === scope ? job.formPreferences.fields
-      : /\/bizes\/1491414\/items\/7037654$/.test(expected.pathname) ? {treatment: job.treatment || '필러', source: job.source || '유튜브'} : null;
+      : /\/bizes\/1491414\/items\/7037654$/.test(expected.pathname) ? {treatment: job.treatment || '제모', source: job.source || '네이버 검색'} : null;
     if (!preferences) throw new Error('이 상품의 필수 입력을 최종 페이지에서 불러와 미리 설정하세요.');
     await NaverBookingForm.fill(document, preferences, active);
     if (!await active()) return;

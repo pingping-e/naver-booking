@@ -16,8 +16,8 @@ test('reject invalid schedules', () => {
 test('built-in submission selector and additional-info preferences work without overrides', () => {
  const result=validate({...base,autoConfirm:true});
  assert.equal(result.autoConfirm,true);
- assert.equal(result.treatment,'필러');
- assert.equal(result.source,'유튜브');
+ assert.equal(result.treatment,'제모');
+ assert.equal(result.source,'네이버 검색');
  assert.equal(validate({...base,treatment:'스킨보톡스',source:'네이버 검색'}).treatment,'스킨보톡스');
 });
 
