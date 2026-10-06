@@ -19,7 +19,7 @@ if (!extraOptions.includes(Number(config?.intervalExtra))) {
 }
 function renderInterval() {
   const min = Number(form.elements.intervalMin.value), extra = Number(form.elements.intervalExtra.value);
-  document.querySelector('#interval-rule').textContent = extra === 0 ? `등록한 날짜를 모두 확인하고, ${min}초 후 다시 확인합니다.` : `등록한 날짜를 모두 확인하고, ${min}~${min + extra}초 후 다시 확인합니다.`;
+  document.querySelector('#interval-rule').textContent = extra === 0 ? `${min}초 후 다시 확인합니다.` : `${min}~${min + extra}초 후 다시 확인합니다.`;
 }
 form.elements.intervalMin.addEventListener('input',renderInterval);
 for (const radio of document.querySelectorAll('input[name="intervalExtra"]')) radio.addEventListener('change',renderInterval);
