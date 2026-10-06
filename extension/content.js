@@ -5,7 +5,6 @@
   const requestPath = `${expected.pathname.replace(/\/$/, '')}/request`;
   if (location.origin !== expected.origin || ![expected.pathname, requestPath].includes(location.pathname)) return;
   if (job.phase === 'watching' && location.pathname !== expected.pathname) return;
-  const startedAt = job.checkStartedAt || Date.now();
   const send = (type, extra = {}) => chrome.runtime.sendMessage({type, id: job.id, date: job.date, scanId: job.scanId, ...extra});
   // The background validates tab identity before allowing any booking action.
   const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
@@ -121,7 +120,7 @@
     else if (await active()) await send('LOG', {message: '예약 신청 화면 또는 로그인을 기다리는 중입니다. 새로고침은 중단되어 있습니다.'});
   } catch (error) { await send('RESULT', {message: `안전 중지: ${error.message}`}); }
   finally {
-    const schedule = await send('SCHEDULE', {elapsedMs: Date.now() - startedAt}).catch(() => null);
+    const schedule = await send('SCHEDULE').catch(() => null);
     if (schedule?.ok) {
       const recheck = async () => {
         const remaining = schedule.nextCheckAt - Date.now();

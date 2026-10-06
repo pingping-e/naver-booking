@@ -33,7 +33,7 @@ test('stale result cannot stop current job; stop prevents further claim',async()
 });
 
 test('short-interval refresh validates job and tab before reloading', async () => {
- state.job={id:'b',tabId:7,active:true,phase:'watching',url:'https://m.booking.naver.com/booking/1'};
+ state.job={id:'b',tabId:7,active:true,phase:'watching',url:'https://m.booking.naver.com/booking/1',nextCheckAt:Date.now()-1};
  assert.equal((await message({type:'RECHECK',id:'old'})).ok,false);
  assert.equal((await message({type:'RECHECK',id:'b'},8)).ok,false);
  assert.equal(reloads,0);
@@ -44,24 +44,36 @@ test('short-interval refresh validates job and tab before reloading', async () =
  assert.equal(reloads,1);
 });
 
-test('dates rotate for short timers and alarms; stale date cannot book', async () => {
- state.job={id:'multi',tabId:7,active:true,phase:'watching',dates:['2026-10-06','2026-10-07','2026-10-08'],date:'2026-10-06',dateIndex:0,url:'https://m.booking.naver.com/booking/1?startDate=2026-10-06'};
- assert.equal((await message({type:'RECHECK',id:'multi',date:'2026-10-06'})).ok,true);
- assert.equal(state.job.date,'2026-10-07');
- assert.equal(new URL(updates.at(-1).url).searchParams.get('startDate'),'2026-10-07');
- assert.equal((await message({type:'CLAIM',id:'multi',date:'2026-10-06'})).ok,false);
- await message({type:'RESULT',id:'multi',date:'2026-10-06',message:'stale'});
- assert.equal(state.job.active,true);
+test('all dates run in priority order before waiting; each new round starts at first date', async () => {
+ const dates=['2026-10-16','2026-10-23','2026-10-30'];
+ state.job={id:'multi',scanId:'first',tabId:7,active:true,phase:'watching',dates,date:dates[0],dateIndex:0,url:'https://m.booking.naver.com/booking/1?startDate='+dates[0],intervalMin:5,intervalMax:5};
+ const beforeAlarms=alarms.length, beforeUpdates=updates.length;
+ const firstScan=state.job.scanId;
+ assert.equal((await message({type:'RECHECK',id:'multi',date:dates[0]})).ok,false);
+ assert.equal((await message({type:'SCHEDULE',id:'multi',date:dates[0]})).ok,false);
+ assert.equal(state.job.date,dates[1]);
+ assert.equal(state.job.nextCheckAt,null);
+ assert.equal(alarms.length,beforeAlarms);
+ assert.equal((await message({type:'SCHEDULE',id:'multi',date:dates[0],scanId:firstScan})).ok,false);
+ assert.equal((await message({type:'CLAIM',id:'multi',date:dates[0]})).ok,false);
+ await message({type:'SCHEDULE',id:'multi',date:dates[1]});
+ assert.equal(state.job.date,dates[2]);
+ assert.equal(alarms.length,beforeAlarms);
+ const started=Date.now();
+ const scheduled=await message({type:'SCHEDULE',id:'multi',date:dates[2],elapsedMs:100000});
+ assert.equal(scheduled.ok,true);
+ assert.ok(scheduled.nextCheckAt>=started+5000);
+ assert.equal(alarms.length,beforeAlarms+1);
+ assert.equal((await message({type:'RECHECK',id:'multi',date:dates[2]})).ok,false);
  state.job.nextCheckAt=Date.now()-1;
  await alarmListener({name:'booking-watch'});
- assert.equal(state.job.date,'2026-10-08');
- await message({type:'RECHECK',id:'multi',date:'2026-10-08'});
- assert.equal(state.job.date,'2026-10-06');
- assert.equal(state.job.dateIndex,0);
- assert.equal(updates.length,3);
- assert.equal((await message({type:'CLAIM',id:'multi',date:'2026-10-06'})).ok,true);
+ assert.equal(state.job.date,dates[0]);assert.equal(state.job.dateIndex,0);
+ assert.deepEqual(updates.slice(beforeUpdates).map(entry=>new URL(entry.url).searchParams.get('startDate')),[dates[1],dates[2],dates[0]]);
+ assert.equal((await message({type:'CLAIM',id:'multi',date:dates[0]})).ok,true);
+ const count=updates.length;
+ assert.equal((await message({type:'SCHEDULE',id:'multi',date:dates[0]})).ok,false);
  await alarmListener({name:'booking-watch'});
- assert.equal(updates.length,3);
+ assert.equal(updates.length,count);
 });
 
 test('final submission needs matching request page, consent and one atomic claim', async () => {
@@ -119,3 +131,14 @@ test('initial navigation errors stop the new job and return a failure', async ()
  assert.equal(response.ok,false);assert.equal(state.job.active,false);
  assert.match(state.job.status,/예약 페이지 열기 실패/);
 });
+
+ test('logs discard older entries and keep only the latest five', async () => {
+ state.logs=Array.from({length:60},(_,i)=>({at:'2026-10-06T00:00:00Z',message:`old ${i}`}));
+ await message({type:'PRUNE_LOGS'});
+ assert.equal(state.logs.length,5);assert.equal(state.logs[0].message,'old 0');
+ await message({type:'STOP'});
+ assert.equal(state.logs.length,5);assert.equal(state.logs[0].message,'사용자 중지');
+ assert.deepEqual(state.logs.slice(1).map(entry=>entry.message),['old 0','old 1','old 2','old 3']);
+ for(let i=0;i<7;i++) await message({type:'STOP'});
+ assert.equal(state.logs.length,5);
+ });

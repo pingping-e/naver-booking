@@ -4,7 +4,7 @@ let queue = Promise.resolve();
 function serialized(fn) { const result = queue.then(fn); queue = result.catch(() => {}); return result; }
 async function log(message) {
   const {logs = []} = await chrome.storage.local.get('logs');
-  await chrome.storage.local.set({logs: [{at: new Date().toISOString(), message}, ...logs].slice(0, 60)});
+  await chrome.storage.local.set({logs: [{at: new Date().toISOString(), message}, ...logs].slice(0, 5)});
 }
 async function stop(reason) {
   await chrome.alarms.clear(ALARM);
@@ -12,12 +12,11 @@ async function stop(reason) {
   if (job) await chrome.storage.local.set({job: {...job, active: false, status: reason}});
   await log(reason);
 }
-async function refresh(job) {
+async function refresh(job, dateIndex = 0) {
   await chrome.alarms.clear(ALARM);
   const refreshed = {...job, scanId: crypto.randomUUID(), checkStartedAt: Date.now(), nextCheckAt: null};
   try {
     if (job.dates?.length > 1) {
-      const dateIndex = ((job.dateIndex ?? 0) + 1) % job.dates.length;
       const date = job.dates[dateIndex];
       const url = new URL(job.url);
       url.searchParams.set('startDate', date);
@@ -35,7 +34,10 @@ async function refresh(job) {
 }
 chrome.runtime.onMessage.addListener((msg, sender, respond) => {
   serialized(async () => {
-    if (msg.type === 'CONTEXT') {
+    if (msg.type === 'PRUNE_LOGS') {
+      const {logs = []} = await chrome.storage.local.get('logs');
+      if (logs.length > 5) await chrome.storage.local.set({logs: logs.slice(0, 5)});
+    } else if (msg.type === 'CONTEXT') {
       const {job} = await chrome.storage.local.get('job');
       return {ok: true, job: sender.tab?.id === job?.tabId ? job : null};
     } else if (msg.type === 'START') {
@@ -63,15 +65,18 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
       const {job} = await chrome.storage.local.get('job');
       if (!job?.active || job.phase !== 'watching' || job.id !== msg.id || job.date !== msg.date || job.scanId !== msg.scanId || sender.tab?.id !== job.tabId) return {ok: false};
       if (job.nextCheckAt) return {ok: true, nextCheckAt: job.nextCheckAt};
+      if ((job.dateIndex ?? 0) < (job.dates?.length ?? 1) - 1) {
+        await refresh(job, (job.dateIndex ?? 0) + 1);
+        return {ok: false}; // The next document continues this round without a timer.
+      }
       const seconds = nextInterval(job.intervalMin ?? job.interval, job.intervalMax ?? job.interval);
-      const elapsed = Math.max(0, Math.min(Number(msg.elapsedMs) || 0, 86400000));
-      const delay = Math.max(100, seconds * 1000 - elapsed);
+      const delay = seconds * 1000;
       const nextCheckAt = Date.now() + delay;
-      await chrome.storage.local.set({job: {...job, lastInterval: seconds, nextCheckAt, status: `감시 중: ${job.date} — 다음 확인 ${seconds}초 간격`}});
+      await chrome.storage.local.set({job: {...job, lastInterval: seconds, nextCheckAt, status: `전체 날짜 확인 완료 — ${seconds}초 후 첫 날짜부터 다시 확인`}});
       await chrome.alarms.clear(ALARM);
       // One-shot alarms are a fallback; the tab timer handles sub-30-second waits.
       await chrome.alarms.create(ALARM, {when: Math.max(nextCheckAt, Date.now() + 30000)});
-      await log(`다음 새로고침 간격 ${seconds}초`);
+      await log(`전체 날짜 확인 완료, 다음 확인까지 ${seconds}초`);
       return {ok: true, nextCheckAt};
     } else if (msg.type === 'RECHECK') {
       const {job} = await chrome.storage.local.get('job');
@@ -81,7 +86,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
         await stop('다른 화면으로 이동하여 감시 중지');
         return {ok: false};
       }
-      if (job.nextCheckAt && Date.now() < job.nextCheckAt) return {ok: false};
+      if (!job.nextCheckAt || Date.now() < job.nextCheckAt) return {ok: false};
       if (!await refresh(job)) return {ok: false, error: '새로고침 실패'};
     } else if (msg.type === 'RESULT') {
       const {job} = await chrome.storage.local.get('job');

@@ -94,3 +94,15 @@ test('default 15-to-60-second configuration remains valid', () => {
  const result=validate({...base,intervalMin:15,intervalMax:60});
  assert.equal(result.intervalMin,15);assert.equal(result.intervalMax,60);
 });
+
+ test('additional seconds produce fixed or random bounds and validate input', () => {
+ for (const extra of [0,15,30,45,60,90,120]) {
+  const job=validate({...base,intervalMin:5,intervalExtra:String(extra)});
+  assert.equal(job.intervalMin,5);assert.equal(job.intervalMax,5+extra);
+  assert.equal(nextInterval(job.intervalMin,job.intervalMax,()=>0),5);
+  assert.equal(nextInterval(job.intervalMin,job.intervalMax,()=>0.999999),5+extra);
+ }
+ for(const patch of [{intervalMin:4,intervalExtra:15},{intervalMin:5.5,intervalExtra:15},{intervalMin:121,intervalExtra:0},{intervalMin:5,intervalExtra:-15},{intervalMin:5,intervalExtra:10}]) assert.throws(()=>validate({...base,...patch}));
+ const defaultJob=validate({...base,intervalMin:15,intervalExtra:45});
+ assert.equal(defaultJob.intervalMax,60);
+ });

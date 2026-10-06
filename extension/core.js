@@ -16,7 +16,12 @@ export function validate(input) {
   if (['after', 'range'].includes(timeMode) && !validTime(input.timeStart)) throw new Error('시작 시간을 선택하세요.');
   if (timeMode === 'range' && (!validTime(input.timeEnd) || input.timeEnd < input.timeStart)) throw new Error('종료 시간은 시작 시간 이후로 선택하세요.');
   let intervalMin, intervalMax;
-  if (input.intervalMin !== undefined || input.intervalMax !== undefined) {
+  if (input.intervalExtra !== undefined) {
+    intervalMin = Number(input.intervalMin);
+    const extra = Number(input.intervalExtra);
+    if (!Number.isInteger(intervalMin) || intervalMin < 5 || intervalMin > 120 || ![0,15,30,45,60,90,120].includes(extra)) throw new Error('최소 시간은 5~120초의 정수, 추가 시간은 표시된 옵션 중에서 선택하세요.');
+    intervalMax = intervalMin + extra;
+  } else if (input.intervalMin !== undefined || input.intervalMax !== undefined) {
     intervalMin = Number(input.intervalMin);intervalMax = Number(input.intervalMax);
     if (!Number.isInteger(intervalMin) || intervalMin < 5 || ![15,30,60,90,120].includes(intervalMax) || intervalMin > intervalMax) throw new Error('최소 시간은 5초 이상, 최대 시간 이하로 지정하고 최대 시간은 15·30·60·90·120초 중에서 선택하세요.');
   } else if (input.intervalPreset) {
