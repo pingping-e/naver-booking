@@ -1,0 +1,18 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><title>네이버 예약 감시</title><link rel="stylesheet" href="popup.css"><body>
+<h1>네이버 예약 감시</h1>
+<form id="settings">
+<label>예약 페이지 주소<input name="url" type="url" required placeholder="https://m.booking.naver.com/booking/…"></label>
+<label>원하는 날짜<input name="date" type="date" required></label>
+<label>원하는 시간 (우선순위 순)<input name="times" required placeholder="09:00, 10:30"></label>
+<label>확인 간격 (초, 최소 60)<input name="interval" type="number" min="60" max="86400" value="60" required></label>
+<details><summary>화면 선택자 설정</summary>
+<p>날짜 기본값: data-date 또는 aria-label의 YYYY-MM-DD. 시간 기본값: 버튼의 HH:mm 텍스트. 실제 화면에서 확인한 CSS 선택자를 입력하세요.</p>
+<label>날짜 버튼 선택자<input name="dateSelector" placeholder='[data-date="2026-10-06"]'></label>
+<label>시간 버튼 선택자<input name="timeSelector" placeholder='button[data-time="{time}"]'></label>
+<label>예약 진행 버튼 선택자<input name="bookingSelector" placeholder="비어 있으면 예약하기 / 예약 / 다음"></label>
+<label>최종 확정 버튼 선택자<input name="confirmSelector"></label>
+</details>
+<label class="check"><input name="autoConfirm" type="checkbox"> 최종 확정도 자동 클릭 (예약·결제 발생 가능)</label>
+<p>먼저 네이버에 로그인하세요. 기본 모드는 예약 진행 버튼 클릭 후 멈춥니다. 브라우저가 열려 있어야 하며 로그인·인증·결제는 직접 처리해야 할 수 있습니다.</p>
+<button type="submit">설정 저장 및 감시 시작</button><button id="stop" type="button">중지</button>
+</form><p id="status" role="status"></p><ul id="logs"></ul><script type="module" src="popup.js"></script></body></html>
