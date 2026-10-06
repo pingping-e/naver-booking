@@ -10,6 +10,7 @@ async function checkBookingDate(job) {
   const enabled = el => visible(el) && !el.disabled && el.getAttribute('aria-disabled') !== 'true' && !el.closest('[inert]') && !/(?:^|[ _-])(?:disabled|unselectable)(?:[ _-]|$)/i.test(el.className || '');
   const text = el => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
   const unique = list => { const items = [...list].filter(enabled); if (items.length > 1) throw new Error('같은 조건의 버튼이 여러 개입니다. 선택자를 더 구체적으로 지정하세요.'); return items[0]; };
+  const dateButton = elements => { const items = [...elements].filter(el => visible(el) && (enabled(el) || el.classList.contains('closed'))); if (items.length > 1) throw new Error('같은 날짜의 버튼이 여러 개입니다. 날짜 선택자를 확인하세요.'); return items[0]; };
   const pick = (selector, fallback) => unique(selector ? document.querySelectorAll(selector) : [...document.querySelectorAll('button, a, [role="button"]')].filter(fallback));
   const wait = async fn => { const deadline = Date.now() + 15000; do { const found = fn(); if (found) return found; await new Promise(r => setTimeout(r, 300)); } while (Date.now() < deadline); return null; };
   const active = async () => { const {job: latest} = await chrome.storage.local.get('job'); return latest?.id === job.id && latest.date === job.date && latest.scanId === job.scanId && latest.active; };
@@ -55,7 +56,7 @@ async function checkBookingDate(job) {
       return match ? Number(match[1]) * 12 + Number(match[2]) : null;
     };
     let date = await wait(() => {
-      const direct = pick(dateSelector);
+      const direct = dateButton(document.querySelectorAll(dateSelector));
       if (direct || job.dateSelector) return direct;
       const displayedMonth = calendarMonth();
       const buttons = [...document.querySelectorAll('.calendar_table button.calendar_date')];
@@ -70,7 +71,7 @@ async function checkBookingDate(job) {
         if (!match || !await active()) break;
         const currentMonth = Number(match[1]) * 12 + Number(match[2]);
         if (currentMonth === targetMonth) {
-          date = await wait(() => calendarMonth() === targetMonth && unique([...document.querySelectorAll('.calendar_table button.calendar_date')].filter(el => Number(el.querySelector('.num')?.textContent) === day)));
+          date = await wait(() => calendarMonth() === targetMonth && dateButton([...document.querySelectorAll('.calendar_table button.calendar_date')].filter(el => Number(el.querySelector('.num')?.textContent) === day)));
           break;
         }
         const direction = currentMonth < targetMonth ? '.btn_next' : '.btn_prev';
@@ -85,14 +86,16 @@ async function checkBookingDate(job) {
     // A query parameter alone is not proof of the selected calendar date.
     if (!date) throw new Error('날짜 버튼이 준비되지 않아 예약 가능 여부를 확인하지 못했습니다. 화면을 확인한 뒤 다시 시작하세요.');
     if (!await active()) return;
+    if (date.classList.contains('closed')) {
+      await send('LOG', {message: '예약 불가'});return;
+    }
+    if (!enabled(date)) {
+      await send('LOG', {message: '예약 불가'});return;
+    }
     date.click();
     if (!job.dateSelector && date.matches('.calendar_date')) {
       const selected = await wait(() => document.querySelector('.calendar_date.selected .num')?.textContent.trim() === String(Number(job.date.slice(-2))));
       if (!selected) throw new Error('선택한 날짜를 확인하지 못했습니다.');
-    }
-    if (date.classList.contains('closed')) {
-      await send('LOG', {message: '해당 날짜는 마감 상태입니다.'});
-      return;
     }
     await new Promise(r => setTimeout(r, 700));
     let chosen;
@@ -116,7 +119,8 @@ async function checkBookingDate(job) {
         if (found) {chosen = time; return found;}
       }
     });
-    if (!slot) { await send('LOG', {message: '설정한 시간 조건에 맞는 예약 가능 시간이 없습니다.'}); return; }
+    if (!slot) { await send('LOG', {message: '예약 불가'}); return; }
+    await send('LOG', {message: `예약 가능: ${chosen}`});
     const claim = await send('CLAIM', {time: chosen});
     if (!claim?.ok || !await active()) return;
     slot.click();
