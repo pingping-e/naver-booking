@@ -1,8 +1,10 @@
 (async () => {
   const {job} = await chrome.runtime.sendMessage({type: 'CONTEXT'});
-  if (!job?.active || job.phase !== 'watching') return;
+  if (!job?.active || !['watching', 'booking'].includes(job.phase)) return;
   const expected = new URL(job.url);
-  if (location.origin !== expected.origin || location.pathname !== expected.pathname) return;
+  const requestPath = `${expected.pathname.replace(/\/$/, '')}/request`;
+  if (location.origin !== expected.origin || ![expected.pathname, requestPath].includes(location.pathname)) return;
+  if (job.phase === 'watching' && location.pathname !== expected.pathname) return;
   const startedAt = Date.now();
   const send = (type, extra = {}) => chrome.runtime.sendMessage({type, id: job.id, date: job.date, ...extra});
   // The background validates tab identity before allowing any booking action.
@@ -13,7 +15,37 @@
   const pick = (selector, fallback) => unique(selector ? document.querySelectorAll(selector) : [...document.querySelectorAll('button, a, [role="button"]')].filter(fallback));
   const wait = async fn => { const deadline = Date.now() + 15000; do { const found = fn(); if (found) return found; await new Promise(r => setTimeout(r, 300)); } while (Date.now() < deadline); return null; };
   const active = async () => { const {job: latest} = await chrome.storage.local.get('job'); return latest?.id === job.id && latest.date === job.date && latest.active; };
+  const finishRequest = async () => {
+    const current = new URL(location.href);
+    const start = current.searchParams.get('startDateTime');
+    if (location.pathname !== requestPath || (start && (!start.startsWith(`${job.date}T`) || (job.selectedTime && start.slice(11, 16) !== job.selectedTime)))) throw new Error('예약 신청 날짜/시간 또는 경로가 작업과 다릅니다.');
+    const selector = job.confirmSelector || 'button[data-click-code="submitbutton.submit"]';
+    const formReady = await wait(() => document.querySelector(selector) && document.querySelector('.booking_inner .form_title .necessary_text, input[required], select[required], textarea[required], [aria-required="true"]'));
+    if (!formReady) throw new Error('추가정보 또는 예약 신청 버튼을 찾지 못했습니다. 화면을 직접 확인하세요.');
+    const scope = expected.origin + expected.pathname.replace(/\/$/, '');
+    const preferences = job.formPreferences?.scope === scope ? job.formPreferences.fields
+      : /\/bizes\/1491414\/items\/7037654$/.test(expected.pathname) ? {treatment: job.treatment || '필러', source: job.source || '유튜브'} : null;
+    if (!preferences) throw new Error('이 상품의 필수 입력을 최종 페이지에서 불러와 미리 설정하세요.');
+    await NaverBookingForm.fill(document, preferences, active);
+    if (!await active()) return;
+    if (!job.autoConfirm) {
+      await send('RESULT', {message: '추가정보 설정을 적용했습니다. 화면에서 확인 후 직접 예약 신청하세요.'});
+      return;
+    }
+    const confirm = await wait(() => pick(selector));
+    if (!confirm) throw new Error('예약 신청 버튼이 비활성입니다. 필수 입력과 약관을 확인하세요.');
+    const invalid = [...document.querySelectorAll('input[required], select[required], textarea[required]')].some(el => !el.disabled && !el.checkValidity());
+    if (invalid) throw new Error('입력되지 않은 필수 항목이 있습니다. 직접 입력하세요.');
+    const claim = await send('FINAL_CLAIM');
+    if (!claim?.ok || !await active()) return;
+    confirm.click();
+    await send('RESULT', {message: '동의하고 예약 신청하기 버튼을 1회 클릭했습니다. 예약 내역에서 접수 여부를 확인하세요.'});
+  };
   try {
+    if (job.phase === 'booking') {
+      if (location.pathname === requestPath) await finishRequest();
+      return;
+    }
     await new Promise(r => setTimeout(r, 1500));
     if (/로그인이 필요|로그인해 주세요|자동입력 방지|캡차/.test(document.body.innerText)) { await send('RESULT', {message: '로그인 또는 인증이 필요합니다. 직접 처리 후 다시 시작하세요.'}); return; }
     const dateSelector = job.dateSelector?.replaceAll('{date}', job.date).replaceAll('{day}', String(Number(job.date.slice(-2)))) || `[data-date="${job.date}"], [aria-label="${job.date}"]`;
@@ -74,19 +106,18 @@
       }
     });
     if (!slot) { await send('LOG', {message: job.times.length ? '원하는 시간의 활성 버튼 없음' : '예약 가능한 시간 없음'}); return; }
-    const claim = await send('CLAIM');
+    const claim = await send('CLAIM', {time: chosen});
     if (!claim?.ok || !await active()) return;
     slot.click();
     const booking = await wait(() => pick(job.bookingSelector || (document.querySelector('[data-click-code="nextbuttonview.request"]') ? '[data-click-code="nextbuttonview.request"]' : null), el => /^(예약하기|예약|다음|다음단계)$/.test(text(el))));
     if (!booking) throw new Error('예약 진행 버튼을 찾지 못했습니다. 화면을 직접 확인하세요.');
     if (!await active()) return;
     booking.click();
-    if (!job.autoConfirm) { await send('RESULT', {message: `${job.date} ${chosen} 예약 진행 버튼 클릭. 화면에서 내용을 확인하고 직접 확정하세요.`}); return; }
-    const confirm = await wait(() => pick(job.confirmSelector));
-    if (!confirm) throw new Error('최종 확정 버튼을 찾지 못했습니다. 자동 재시도 없이 중지합니다.');
-    if (!await active()) return;
-    confirm.click();
-    await send('RESULT', {message: '최종 확정 버튼을 1회 클릭했습니다. 예약 내역에서 성공 여부를 확인하세요.'});
+    // A new request document resumes from the stored booking phase.
+    // Also handle SPA navigation when this document remains alive.
+    const requestReady = await wait(() => location.pathname === requestPath && document.querySelector(job.confirmSelector || 'button[data-click-code="submitbutton.submit"]'));
+    if (requestReady && await active()) await finishRequest();
+    else if (await active()) await send('LOG', {message: '예약 신청 화면 또는 로그인을 기다리는 중입니다. 새로고침은 중단되어 있습니다.'});
   } catch (error) { await send('RESULT', {message: `안전 중지: ${error.message}`}); }
   finally {
     if (job.interval < 30) {

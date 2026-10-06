@@ -11,7 +11,20 @@ export function validate(input) {
   if (!Array.isArray(input.times) || input.times.some(t => !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) throw new Error('시간은 09:00, 10:30 형식으로 입력하세요.');
   const interval = Number(input.interval);
   if (!Number.isFinite(interval) || interval < 15 || interval > 86400) throw new Error('확인 간격은 15~86400초입니다.');
-  if (input.autoConfirm && !input.confirmSelector?.trim()) throw new Error('최종 확정 버튼 선택자가 필요합니다.');
+  const treatment = input.treatment?.trim() || '필러';
+  const source = input.source?.trim() || '유튜브';
+  const scope = url.origin + url.pathname.replace(/\/$/, '');
+  const formPreferences = input.formPreferences?.scope === scope ? input.formPreferences : null;
+  if (formPreferences && (!Array.isArray(formPreferences.fields) || formPreferences.fields.length > 50)) throw new Error('필수 입력 설정을 다시 불러오세요.');
   url.searchParams.set('startDate', uniqueDates[0]);
-  return {...input, dates: uniqueDates, date: uniqueDates[0], dateIndex: 0, url: url.href, interval, times: [...new Set(input.times)]};
+  return {...input, treatment, source, formPreferences, dates: uniqueDates, date: uniqueDates[0], dateIndex: 0, url: url.href, interval, times: [...new Set(input.times)]};
+}
+
+export function isRequestUrl(job, value) {
+  try {
+    const current = new URL(value), expected = new URL(job.url);
+    if (current.origin !== expected.origin || current.pathname !== `${expected.pathname.replace(/\/$/, '')}/request`) return false;
+    const start = current.searchParams.get('startDateTime');
+    return !start || (start.startsWith(`${job.date}T`) && (!job.selectedTime || start.slice(11,16) === job.selectedTime));
+  } catch {return false;}
 }

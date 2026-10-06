@@ -1,3 +1,7 @@
 body{width:360px;margin:16px;font:14px system-ui;color:#172b23}h1{font-size:20px}label{display:block;margin:10px 0}input:not([type=checkbox]){box-sizing:border-box;width:100%;padding:8px;margin-top:4px;border:1px solid #aab9b0;border-radius:5px}.check{display:flex;gap:8px}button{padding:10px;margin-right:6px;border:0;border-radius:5px;background:#087d44;color:white;cursor:pointer}#stop{background:#53645b}p{font-size:12px;line-height:1.6}ul{padding-left:18px;font-size:12px;max-height:170px;overflow:auto}li{margin-bottom:8px}
 
 fieldset{border:1px solid #aab9b0;border-radius:5px;padding:8px}a{color:#087d44}
+
+select{width:100%;box-sizing:border-box;padding:8px;margin-top:4px;border:1px solid #aab9b0;border-radius:5px}
+
+textarea{width:100%;box-sizing:border-box;min-height:70px}select[multiple]{min-height:100px}

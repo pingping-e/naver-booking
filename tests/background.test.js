@@ -11,7 +11,7 @@ globalThis.chrome = {
  tabs:{onRemoved:{addListener(){}},async reload(){reloads++;},async update(tabId,options){updates.push({tabId,...options});},async get(){return {url:state.job.url};}}
 };
 await import('../extension/background.js');
-const message=(msg,tabId=7)=>new Promise(resolve=>listener(msg,{tab:{id:tabId,url:'https://m.booking.naver.com/booking/1'}},resolve));
+const message=(msg,tabId=7,url='https://m.booking.naver.com/booking/1')=>new Promise(resolve=>listener(msg,{tab:{id:tabId,url}},resolve));
 test('only designated tab obtains context and claims booking once', async()=>{
  assert.equal((await message({type:'CONTEXT'},8)).job,null);
  assert.equal((await message({type:'CLAIM',id:'a'},8)).ok,false);
@@ -59,4 +59,19 @@ test('dates rotate for short timers and alarms; stale date cannot book', async (
  assert.equal((await message({type:'CLAIM',id:'multi',date:'2026-10-06'})).ok,true);
  await alarmListener({name:'booking-watch'});
  assert.equal(updates.length,3);
+});
+
+test('final submission needs matching request page, consent and one atomic claim', async () => {
+ const date='2026-10-26',url='https://m.booking.naver.com/booking/1';
+ state.job={id:'final',tabId:7,active:true,autoConfirm:false,phase:'booking',date,url,selectedTime:'18:00'};
+ const msg={type:'FINAL_CLAIM',id:'final',date};
+ const request=url+'/request?startDateTime=2026-10-26T18:00:00';
+ assert.equal((await message(msg,7,request)).ok,false);
+ state.job.autoConfirm=true;
+ assert.equal((await message(msg,7,url)).ok,false);
+ assert.equal((await message(msg,8,request)).ok,false);
+ assert.equal((await message(msg,7,request.replace('18:00','17:00'))).ok,false);
+ const claims=await Promise.all([message(msg,7,request),message(msg,7,request)]);
+ assert.deepEqual(claims.map(r=>r.ok),[true,false]);
+ assert.equal(state.job.phase,'submitting');
 });

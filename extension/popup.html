@@ -11,14 +11,44 @@
 </fieldset><p>날짜마다 순서대로 확인합니다. 5일·15초 설정이면 같은 날짜는 약 75초마다 확인합니다 (로딩 시간에 따라 지연).</p>
 <label>원하는 시간 (선택, 비우면 모든 시간)<input name="times" placeholder="09:00, 10:30"></label>
 <label>확인 간격 (초, 최소 15)<input name="interval" type="number" min="15" max="86400" value="15" required></label>
+<fieldset id="clinic-presets"><legend>현재 참고 상품의 추가정보 기본값</legend>
+<label>시술 선택<select name="treatment">
+<option>보톡스(화살코X)</option>
+<option>스킨보톡스</option>
+<option selected>필러</option>
+<option>실 리프팅 (민트실)</option>
+<option>레이저 리프팅 (슈링크 유니버스)</option>
+<option>레이저 리프팅 (울쎄라피 프라임)</option>
+<option>스킨 부스터</option>
+<option>점,편평사마귀,쥐젖,비립종</option>
+<option>색소 (주근깨 잡티 흑자 기미 오타모반 등)</option>
+<option>흉터 (여드름 수술 외상 등)</option>
+<option>문신제거 (블랙 / 컬러)</option>
+<option>제모</option>
+</select></label><label>내원 경로<select name="source">
+<option>네이버 검색</option>
+<option>네이버 블로그</option>
+<option>강남언니</option>
+<option>인스타그램</option>
+<option>쓰레드</option>
+<option selected>유튜브</option>
+<option>지인 추천 (요청 사항에 기입해주세요)</option>
+</select></label><p>신청 화면에서 설정한 값만 선택합니다. 선택할 수 없는 항목은 다른 값으로 대체하지 않고 중지합니다.</p></fieldset>
+<fieldset><legend>가게별 필수 입력 미리 설정</legend>
+<p>로그인한 예약 페이지에서 날짜·시간을 골라 최종 신청 화면까지 이동한 뒤, 아래 버튼을 누르세요. 필수 항목과 선택지를 읽어옵니다.</p>
+<button type="button" id="inspect-form">현재 탭의 필수 항목 불러오기</button>
+<p id="form-scope"></p><div id="form-fields"></div>
+<button type="button" id="save-fields">필수 입력 설정 저장</button>
+<p>입력값은 이 브라우저에 저장되고 해당 예약 상품에만 적용됩니다. 비밀번호·결제정보는 입력하지 마세요.</p>
+</fieldset>
 <details><summary>고급 설정 (기본값으로 작동하지 않을 때만)</summary>
 <p>날짜·시간·다음단계 버튼은 자동 인식합니다. 참고 상품의 달력, 오전/오후 시간 구역과 다음단계 버튼을 확인해 반영했습니다. 기본 인식이 되면 비워두세요. 아래 도움말에서 선택자를 찾는 방법을 확인하세요.</p>
 <label>날짜 버튼 선택자<input name="dateSelector" placeholder='[data-date="{date}"]'></label>
 <label>시간 버튼 선택자<input name="timeSelector" placeholder='button[data-time="{time}"]'></label>
 <label>예약 진행 버튼 선택자<input name="bookingSelector" placeholder="비어 있으면 예약하기 / 예약 / 다음 / 다음단계"></label>
-<label>최종 확정 버튼 선택자<input name="confirmSelector"></label>
+<label>최종 확정 버튼 선택자<input name="confirmSelector" placeholder="비우면 동의하고 예약 신청하기 자동 인식"></label>
 <p>날짜 선택자의 {date}는 YYYY-MM-DD, {day}는 일 숫자로 바뀝니다. 여러 날짜를 등록할 때 고정 날짜 선택자는 사용할 수 없습니다.</p><a href="selectors.html" target="_blank">선택자를 어디서 찾나요? (설명 보기)</a></details>
 <label class="check"><input name="autoConfirm" type="checkbox"> 최종 확정도 자동 클릭 (예약·결제 발생 가능)</label>
-<p>먼저 네이버에 로그인하세요. 기본 모드는 예약 진행 버튼 클릭 후 멈춥니다. 브라우저가 열려 있어야 하며 로그인·인증·결제는 직접 처리해야 할 수 있습니다.</p>
+<p>먼저 네이버에 로그인하세요. 기본 모드는 신청 화면에서 추가정보를 적용한 후 최종 제출 전에 멈춥니다. 브라우저가 열려 있어야 하며 로그인·인증·결제는 직접 처리해야 할 수 있습니다.</p>
 <button type="submit">설정 저장 및 감시 시작</button><button id="stop" type="button">중지</button>
 </form><p id="status" role="status"></p><ul id="logs"></ul><script type="module" src="popup.js"></script></body></html>
