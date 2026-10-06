@@ -148,7 +148,11 @@ document.querySelector('#inspect-form').addEventListener('click',async()=>{
     if (!response.ok) throw new Error(response.error);
     form.elements.url.value=response.scope;
     document.querySelector('#clinic-presets').hidden=!/\/bizes\/1491414\/items\/7037654$/.test(response.scope);
-    renderFields(formProfiles[response.scope] || response);
+    const saved=formProfiles[response.scope];
+    renderFields({...response,fields:response.fields.map(field=>{
+      const previous=saved?.fields.find(item=>item.key===field.key && item.type===field.type);
+      return previous ? {...field,value:previous.value} : field;
+    })});
     status.textContent='필수 항목을 불러왔습니다. 값을 지정하고 저장하세요.';
   } catch(error) {status.textContent=error.message;}
 });

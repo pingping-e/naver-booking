@@ -98,3 +98,33 @@ test('missing, disabled and duplicate custom options do not choose a substitute'
 test('stop prevents custom dropdown selections',async()=>{
  const fixture=customFixture();await assert.rejects(()=>fill(fixture.root,fixture.settings,async()=>false),/중지/);assert.equal(fixture.clicks(),0);
 });
+
+function agreementFixture({checked=false,required=true}={}) {
+ let clicks=0;
+ const label={textContent:'아래 내용에 모두 동의합니다*필수',querySelector:selector=>selector.includes('required') ? required ? {} : null : {textContent:'아래 내용에 모두 동의합니다*필수'},querySelectorAll:()=>[input],click(){clicks++;input.checked=!input.checked;}};
+ const input={tagName:'INPUT',type:'checkbox',value:'on',checked,getAttribute:()=>null,closest:()=>label};
+ const root={querySelectorAll:selector=>selector.includes('checkbox_agree_all') ? [label] : []};
+ const settings=[{key:'field:아래 내용에 모두 동의합니다',type:'checkbox',value:['on']}];
+ return {root,input,settings,clicks:()=>clicks};
+}
+test('required agreement marker is detected without an HTML required attribute',()=>{
+ const fixture=agreementFixture();
+ const [field]=NaverBookingForm.discover(fixture.root);
+ assert.equal(field.key,fixture.settings[0].key);assert.equal(field.type,'checkbox');assert.deepEqual(field.value,[]);
+ assert.deepEqual(field.options.map(option=>option.value),['on']);
+});
+test('saved agreement applies through label click and keeps an existing check',async()=>{
+ const fixture=agreementFixture();await fill(fixture.root,fixture.settings);
+ assert.equal(fixture.input.checked,true);assert.equal(fixture.clicks(),1);
+ await fill(fixture.root,fixture.settings);assert.equal(fixture.input.checked,true);assert.equal(fixture.clicks(),1);
+});
+test('agreement requires a saved choice and stop prevents consent clicks',async()=>{
+ const fixture=agreementFixture();
+ await assert.rejects(()=>fill(fixture.root,[]),/설정이 없습니다/);
+ await assert.rejects(()=>fill(fixture.root,[{...fixture.settings[0],value:[]}]),/필수 선택/);
+ await assert.rejects(()=>fill(fixture.root,fixture.settings,async()=>false),/중지/);
+ assert.equal(fixture.input.checked,false);assert.equal(fixture.clicks(),0);
+});
+test('optional agreement is not promoted to a required field',()=>{
+ const fixture=agreementFixture({required:false});assert.throws(()=>NaverBookingForm.discover(fixture.root),/필수 입력란/);
+});

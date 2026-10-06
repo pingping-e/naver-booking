@@ -31,6 +31,13 @@ globalThis.NaverBookingForm = {
       if (!title?.querySelector('[class*="ExtraInputForm__required__"]')) continue;
       add(this.clean(title.textContent), [...group.querySelectorAll('input:not([type="hidden"]), select, textarea, button[aria-haspopup="listbox"]')]);
     }
+    for (const label of root.querySelectorAll('[class*="RequestV2__checkbox_agree_all__"] label')) {
+      if (!label.querySelector('[class*="RequestV2__required__"]')) continue;
+      const controls=[...label.querySelectorAll('input[type="checkbox"]')];
+      if (controls.length!==1) throw new Error('필수 동의 체크박스를 정확하게 구분하지 못했습니다.');
+      if (consumed.has(controls[0])) continue;
+      add(this.clean(label.querySelector('[class*="Checkbox__label__"]')?.textContent || label.textContent), controls);
+    }
     for (const control of root.querySelectorAll('input[required], select[required], textarea[required], input[aria-required="true"], select[aria-required="true"], textarea[aria-required="true"]')) {
       if (consumed.has(control) || control.disabled) continue;
       const label = this.clean(control.labels?.[0]?.textContent || control.getAttribute('aria-label') || control.name || control.id);
