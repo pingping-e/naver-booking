@@ -1,11 +1,35 @@
 {
   "manifest_version": 3,
   "name": "네이버 예약 시간 감시",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "설정한 날짜와 시간을 주기적으로 확인하고 예약 진행을 돕습니다.",
-  "permissions": ["storage", "alarms", "tabs"],
-  "host_permissions": ["https://m.booking.naver.com/*", "https://booking.naver.com/*"],
-  "background": {"service_worker": "background.js", "type": "module"},
-  "action": {"default_popup": "popup.html"},
-  "content_scripts": [{"matches": ["https://m.booking.naver.com/*", "https://booking.naver.com/*"], "js": ["content.js"], "run_at": "document_idle"}]
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://m.booking.naver.com/*",
+    "https://booking.naver.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://m.booking.naver.com/*",
+        "https://booking.naver.com/*"
+      ],
+      "js": [
+        "slots.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
 }

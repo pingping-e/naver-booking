@@ -11,9 +11,14 @@ test('reject unrelated hosts and unsafe URLs', () => {
  for(const url of ['http://m.booking.naver.com/booking/1','https://m.booking.naver.com.evil.test/booking/1','https://example.com/booking/1','https://booking.naver.com/other']) assert.throws(()=>validate({...base,url}));
 });
 test('reject invalid schedules', () => {
- for(const patch of [{date:'2026-02-30'},{times:[]},{times:['24:00']},{interval:5},{interval:Infinity}]) assert.throws(()=>validate({...base,...patch}));
+ for(const patch of [{date:'2026-02-30'},{times:['24:00']},{interval:14},{interval:Infinity}]) assert.throws(()=>validate({...base,...patch}));
 });
 test('final confirmation needs explicit selector', () => {
  assert.throws(()=>validate({...base,autoConfirm:true}));
  assert.equal(validate({...base,autoConfirm:true,confirmSelector:'#confirm'}).autoConfirm,true);
+});
+
+test('allow 15-second checks and any-time mode', () => {
+ assert.deepEqual(validate({...base,times:[],interval:15}).times,[]);
+ assert.equal(validate({...base,interval:15}).interval,15);
 });

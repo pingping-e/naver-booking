@@ -1,1 +1,10 @@
-{"name":"naver-booking-watch","version":"0.1.0","private":true,"type":"module","scripts":{"test":"node --test","check":"node --check extension/background.js && node --check extension/content.js && node --check extension/popup.js"}}
+{
+  "name": "naver-booking-watch",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check extension/background.js && node --check extension/content.js && node --check extension/popup.js && node --check extension/slots.js"
+  }
+}

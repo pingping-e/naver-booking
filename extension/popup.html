@@ -3,8 +3,8 @@
 <form id="settings">
 <label>예약 페이지 주소<input name="url" type="url" required placeholder="https://m.booking.naver.com/booking/…"></label>
 <label>원하는 날짜<input name="date" type="date" required></label>
-<label>원하는 시간 (우선순위 순)<input name="times" required placeholder="09:00, 10:30"></label>
-<label>확인 간격 (초, 최소 60)<input name="interval" type="number" min="60" max="86400" value="60" required></label>
+<label>원하는 시간 (선택, 비우면 모든 시간)<input name="times" placeholder="09:00, 10:30"></label>
+<label>확인 간격 (초, 최소 15)<input name="interval" type="number" min="15" max="86400" value="15" required></label>
 <details><summary>화면 선택자 설정</summary>
 <p>날짜 기본값: data-date 또는 aria-label의 YYYY-MM-DD. 시간 기본값: 버튼의 HH:mm 텍스트. 실제 화면에서 확인한 CSS 선택자를 입력하세요.</p>
 <label>날짜 버튼 선택자<input name="dateSelector" placeholder='[data-date="2026-10-06"]'></label>

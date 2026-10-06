@@ -3,6 +3,7 @@
   if (!job?.active || job.phase !== 'watching') return;
   const expected = new URL(job.url);
   if (location.origin !== expected.origin || location.pathname !== expected.pathname) return;
+  const startedAt = Date.now();
   const send = (type, extra = {}) => chrome.runtime.sendMessage({type, id: job.id, ...extra});
   // The background validates tab identity before allowing any booking action.
   const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
@@ -46,13 +47,21 @@
     await new Promise(r => setTimeout(r, 700));
     let chosen;
     const slot = await wait(() => {
+      if (!job.times.length) {
+        // Keep explicit time-only selectors; a {time} template requires a requested time.
+        const selector = job.timeSelector && !job.timeSelector.includes('{time}') ? job.timeSelector : null;
+        const candidates = selector ? document.querySelectorAll(selector) : document.querySelectorAll('button, a, [role="button"]');
+        const found = [...candidates].find(el => enabled(el) && NaverBookingSlots.parseTime(text(el)) && !/마감|매진|불가/.test(text(el)));
+        if (found) { chosen = NaverBookingSlots.parseTime(text(found)); return found; }
+        return null;
+      }
       for (const time of job.times) {
         const selector = job.timeSelector?.replaceAll('{time}', time);
         const found = pick(selector, el => text(el) === time);
         if (found) {chosen = time; return found;}
       }
     });
-    if (!slot) { await send('LOG', {message: '원하는 시간의 활성 버튼 없음'}); return; }
+    if (!slot) { await send('LOG', {message: job.times.length ? '원하는 시간의 활성 버튼 없음' : '예약 가능한 시간 없음'}); return; }
     const claim = await send('CLAIM');
     if (!claim?.ok || !await active()) return;
     slot.click();
@@ -67,4 +76,11 @@
     confirm.click();
     await send('RESULT', {message: '최종 확정 버튼을 1회 클릭했습니다. 예약 내역에서 성공 여부를 확인하세요.'});
   } catch (error) { await send('RESULT', {message: `안전 중지: ${error.message}`}); }
+  finally {
+    if (job.interval < 30) {
+      // Wait for the current check to finish before reloading. Recheck tab/job identity in the worker.
+      const delay = Math.max(100, job.interval * 1000 - (Date.now() - startedAt));
+      setTimeout(() => send('RECHECK').catch(() => {}), delay);
+    }
+  }
 })();

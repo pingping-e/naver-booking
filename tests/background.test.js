@@ -10,7 +10,7 @@ globalThis.chrome = {
  tabs:{onRemoved:{addListener(){}},async reload(){reloads++;}}
 };
 await import('../extension/background.js');
-const message=(msg,tabId=7)=>new Promise(resolve=>listener(msg,{tab:{id:tabId}},resolve));
+const message=(msg,tabId=7)=>new Promise(resolve=>listener(msg,{tab:{id:tabId,url:'https://m.booking.naver.com/booking/1'}},resolve));
 test('only designated tab obtains context and claims booking once', async()=>{
  assert.equal((await message({type:'CONTEXT'},8)).job,null);
  assert.equal((await message({type:'CLAIM',id:'a'},8)).ok,false);
@@ -27,4 +27,16 @@ test('stale result cannot stop current job; stop prevents further claim',async()
  await message({type:'STOP'});
  assert.equal(state.job.active,false);
  assert.equal((await message({type:'CLAIM',id:'a'})).ok,false);
+});
+
+test('short-interval refresh validates job and tab before reloading', async () => {
+ state.job={id:'b',tabId:7,active:true,phase:'watching',url:'https://m.booking.naver.com/booking/1'};
+ assert.equal((await message({type:'RECHECK',id:'old'})).ok,false);
+ assert.equal((await message({type:'RECHECK',id:'b'},8)).ok,false);
+ assert.equal(reloads,0);
+ assert.equal((await message({type:'RECHECK',id:'b'})).ok,true);
+ assert.equal(reloads,1);
+ state.job.phase='booking';
+ assert.equal((await message({type:'RECHECK',id:'b'})).ok,false);
+ assert.equal(reloads,1);
 });

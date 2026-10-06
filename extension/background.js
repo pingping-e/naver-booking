@@ -23,7 +23,8 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
       const tab = await chrome.tabs.create({url: 'about:blank', active: true});
       const job = {...config, id: crypto.randomUUID(), tabId: tab.id, active: true, phase: 'watching', status: '감시 중'};
       await chrome.storage.local.set({job});
-      await chrome.alarms.create(ALARM, {periodInMinutes: config.interval / 60});
+      // Chrome alarms cannot reliably schedule 15-second intervals.
+      if (config.interval >= 30) await chrome.alarms.create(ALARM, {periodInMinutes: config.interval / 60});
       await chrome.tabs.update(tab.id, {url: config.url});
       await log('감시 시작');
     } else if (msg.type === 'STOP') await stop('사용자 중지');
@@ -33,6 +34,15 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
       await chrome.storage.local.set({job: {...job, phase: 'booking', status: '예약 진행 중 — 새로고침 중단'}});
       await chrome.alarms.clear(ALARM);
       await log('시간 선택 완료, 예약 진행 잠금');
+    } else if (msg.type === 'RECHECK') {
+      const {job} = await chrome.storage.local.get('job');
+      if (!job?.active || job.id !== msg.id || sender.tab?.id !== job.tabId || job.phase !== 'watching') return {ok: false};
+      const current = new URL(sender.tab.url), expected = new URL(job.url);
+      if (current.origin !== expected.origin || current.pathname !== expected.pathname) {
+        await stop('다른 화면으로 이동하여 감시 중지');
+        return {ok: false};
+      }
+      await chrome.tabs.reload(job.tabId);
     } else if (msg.type === 'RESULT') {
       const {job} = await chrome.storage.local.get('job');
       if (job?.id === msg.id && sender.tab?.id === job.tabId) await stop(msg.message);
