@@ -1,5 +1,7 @@
-Calendar shape: [Lucide Calendar](https://lucide.dev/icons/calendar).
-Source: https://github.com/lucide-icons/lucide/blob/main/icons/calendar.svg
+Calendar icon: [Icons8 Calendar, iOS style](https://icons8.kr/icon/23/calendar).
 
-Licensed under the MIT License; see LICENSE.txt.
-The calendar is rendered in white on a #00C73C background. No Naver image asset or lettermark is included.
+Source PNG (50px, white): https://img.icons8.com/?size=50&id=23&format=png&color=FFFFFF
+
+The white calendar is displayed on a #00C73C background.
+Free use requires attribution; links are included in the extension popup and repository README.
+See https://icons8.com/license and LICENSE.txt.
