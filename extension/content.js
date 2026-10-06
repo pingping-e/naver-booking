@@ -5,8 +5,8 @@
   const requestPath = `${expected.pathname.replace(/\/$/, '')}/request`;
   if (location.origin !== expected.origin || ![expected.pathname, requestPath].includes(location.pathname)) return;
   if (job.phase === 'watching' && location.pathname !== expected.pathname) return;
-  const startedAt = Date.now();
-  const send = (type, extra = {}) => chrome.runtime.sendMessage({type, id: job.id, date: job.date, ...extra});
+  const startedAt = job.checkStartedAt || Date.now();
+  const send = (type, extra = {}) => chrome.runtime.sendMessage({type, id: job.id, date: job.date, scanId: job.scanId, ...extra});
   // The background validates tab identity before allowing any booking action.
   const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
   const enabled = el => visible(el) && !el.disabled && el.getAttribute('aria-disabled') !== 'true' && !el.closest('[inert]') && !/(?:^|[ _-])(?:disabled|unselectable)(?:[ _-]|$)/i.test(el.className || '');
@@ -14,7 +14,7 @@
   const unique = list => { const items = [...list].filter(enabled); if (items.length > 1) throw new Error('같은 조건의 버튼이 여러 개입니다. 선택자를 더 구체적으로 지정하세요.'); return items[0]; };
   const pick = (selector, fallback) => unique(selector ? document.querySelectorAll(selector) : [...document.querySelectorAll('button, a, [role="button"]')].filter(fallback));
   const wait = async fn => { const deadline = Date.now() + 15000; do { const found = fn(); if (found) return found; await new Promise(r => setTimeout(r, 300)); } while (Date.now() < deadline); return null; };
-  const active = async () => { const {job: latest} = await chrome.storage.local.get('job'); return latest?.id === job.id && latest.date === job.date && latest.active; };
+  const active = async () => { const {job: latest} = await chrome.storage.local.get('job'); return latest?.id === job.id && latest.date === job.date && latest.scanId === job.scanId && latest.active; };
   const finishRequest = async () => {
     const current = new URL(location.href);
     const start = current.searchParams.get('startDateTime');
@@ -121,10 +121,14 @@
     else if (await active()) await send('LOG', {message: '예약 신청 화면 또는 로그인을 기다리는 중입니다. 새로고침은 중단되어 있습니다.'});
   } catch (error) { await send('RESULT', {message: `안전 중지: ${error.message}`}); }
   finally {
-    if (job.interval < 30) {
-      // Wait for the current check to finish before reloading. Recheck tab/job identity in the worker.
-      const delay = Math.max(100, job.interval * 1000 - (Date.now() - startedAt));
-      setTimeout(() => send('RECHECK').catch(() => {}), delay);
+    const schedule = await send('SCHEDULE', {elapsedMs: Date.now() - startedAt}).catch(() => null);
+    if (schedule?.ok) {
+      const recheck = async () => {
+        const remaining = schedule.nextCheckAt - Date.now();
+        if (remaining > 0) { setTimeout(recheck, remaining);return; }
+        await send('RECHECK').catch(() => {});
+      };
+      setTimeout(recheck, Math.max(0, schedule.nextCheckAt - Date.now()));
     }
   }
 })();

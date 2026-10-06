@@ -1,4 +1,4 @@
-import {validate, isRequestUrl} from './core.js';
+import {validate, isRequestUrl, nextInterval} from './core.js';
 const ALARM = 'booking-watch';
 let queue = Promise.resolve();
 function serialized(fn) { const result = queue.then(fn); queue = result.catch(() => {}); return result; }
@@ -13,15 +13,25 @@ async function stop(reason) {
   await log(reason);
 }
 async function refresh(job) {
-  if (job.dates?.length > 1) {
-    const dateIndex = ((job.dateIndex ?? 0) + 1) % job.dates.length;
-    const date = job.dates[dateIndex];
-    const url = new URL(job.url);
-    url.searchParams.set('startDate', date);
-    await chrome.storage.local.set({job: {...job, dateIndex, date, url: url.href, status: `감시 중: ${date} (${dateIndex + 1}/${job.dates.length})`}});
-    try { await chrome.tabs.update(job.tabId, {url: url.href}); }
-    catch { await stop('날짜 전환 실패 — 다시 시작하세요.'); }
-  } else await chrome.tabs.reload(job.tabId);
+  await chrome.alarms.clear(ALARM);
+  const refreshed = {...job, scanId: crypto.randomUUID(), checkStartedAt: Date.now(), nextCheckAt: null};
+  try {
+    if (job.dates?.length > 1) {
+      const dateIndex = ((job.dateIndex ?? 0) + 1) % job.dates.length;
+      const date = job.dates[dateIndex];
+      const url = new URL(job.url);
+      url.searchParams.set('startDate', date);
+      await chrome.storage.local.set({job: {...refreshed, dateIndex, date, url: url.href, status: `감시 중: ${date} (${dateIndex + 1}/${job.dates.length})`}});
+      await chrome.tabs.update(job.tabId, {url: url.href});
+    } else {
+      await chrome.storage.local.set({job: refreshed});
+      await chrome.tabs.reload(job.tabId);
+    }
+    return true;
+  } catch {
+    await stop('새로고침 또는 날짜 전환 실패 — 탭을 확인하고 다시 시작하세요.');
+    return false;
+  }
 }
 chrome.runtime.onMessage.addListener((msg, sender, respond) => {
   serialized(async () => {
@@ -32,39 +42,53 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
       const config = validate(msg.config);
       await stop('기존 감시 종료');
       const tab = await chrome.tabs.create({url: 'about:blank', active: true});
-      const job = {...config, id: crypto.randomUUID(), tabId: tab.id, active: true, phase: 'watching', status: `감시 중: ${config.date} (1/${config.dates.length})`};
+      const job = {...config, id: crypto.randomUUID(), scanId: crypto.randomUUID(), checkStartedAt: Date.now(), tabId: tab.id, active: true, phase: 'watching', status: `감시 중: ${config.date} (1/${config.dates.length})`};
       await chrome.storage.local.set({job});
-      // Chrome alarms cannot reliably schedule 15-second intervals.
-      if (config.interval >= 30) await chrome.alarms.create(ALARM, {periodInMinutes: config.interval / 60});
-      await chrome.tabs.update(tab.id, {url: config.url});
+      try { await chrome.tabs.update(tab.id, {url: config.url}); }
+      catch { await stop('예약 페이지 열기 실패 — 주소와 탭을 확인하세요.');throw new Error('예약 페이지를 열지 못했습니다.'); }
       await log('감시 시작');
     } else if (msg.type === 'STOP') await stop('사용자 중지');
     else if (msg.type === 'CLAIM') {
       const {job} = await chrome.storage.local.get('job');
-      if (!job?.active || job.id !== msg.id || job.date !== msg.date || sender.tab?.id !== job.tabId || job.phase !== 'watching') return {ok: false};
+      if (!job?.active || job.id !== msg.id || job.date !== msg.date || job.scanId !== msg.scanId || sender.tab?.id !== job.tabId || job.phase !== 'watching') return {ok: false};
       await chrome.storage.local.set({job: {...job, phase: 'booking', selectedTime: msg.time, status: '예약 진행 중 — 새로고침 중단'}});
       await chrome.alarms.clear(ALARM);
       await log('시간 선택 완료, 예약 진행 잠금');
     } else if (msg.type === 'FINAL_CLAIM') {
       const {job} = await chrome.storage.local.get('job');
-      if (!job?.active || !job.autoConfirm || job.phase !== 'booking' || job.id !== msg.id || job.date !== msg.date || sender.tab?.id !== job.tabId || !isRequestUrl(job, sender.tab.url)) return {ok: false};
+      if (!job?.active || !job.autoConfirm || job.phase !== 'booking' || job.id !== msg.id || job.date !== msg.date || job.scanId !== msg.scanId || sender.tab?.id !== job.tabId || !isRequestUrl(job, sender.tab.url)) return {ok: false};
       await chrome.storage.local.set({job: {...job, phase: 'submitting', status: '예약 신청 제출 중 — 재시도하지 않음'}});
       await log('최종 신청 버튼 1회 클릭 잠금');
+    } else if (msg.type === 'SCHEDULE') {
+      const {job} = await chrome.storage.local.get('job');
+      if (!job?.active || job.phase !== 'watching' || job.id !== msg.id || job.date !== msg.date || job.scanId !== msg.scanId || sender.tab?.id !== job.tabId) return {ok: false};
+      if (job.nextCheckAt) return {ok: true, nextCheckAt: job.nextCheckAt};
+      const seconds = nextInterval(job.intervalMin ?? job.interval, job.intervalMax ?? job.interval);
+      const elapsed = Math.max(0, Math.min(Number(msg.elapsedMs) || 0, 86400000));
+      const delay = Math.max(100, seconds * 1000 - elapsed);
+      const nextCheckAt = Date.now() + delay;
+      await chrome.storage.local.set({job: {...job, lastInterval: seconds, nextCheckAt, status: `감시 중: ${job.date} — 다음 확인 ${seconds}초 간격`}});
+      await chrome.alarms.clear(ALARM);
+      // One-shot alarms are a fallback; the tab timer handles sub-30-second waits.
+      await chrome.alarms.create(ALARM, {when: Math.max(nextCheckAt, Date.now() + 30000)});
+      await log(`다음 새로고침 간격 ${seconds}초`);
+      return {ok: true, nextCheckAt};
     } else if (msg.type === 'RECHECK') {
       const {job} = await chrome.storage.local.get('job');
-      if (!job?.active || job.id !== msg.id || job.date !== msg.date || sender.tab?.id !== job.tabId || job.phase !== 'watching') return {ok: false};
+      if (!job?.active || job.id !== msg.id || job.date !== msg.date || job.scanId !== msg.scanId || sender.tab?.id !== job.tabId || job.phase !== 'watching') return {ok: false};
       const current = new URL(sender.tab.url), expected = new URL(job.url);
       if (current.origin !== expected.origin || current.pathname !== expected.pathname) {
         await stop('다른 화면으로 이동하여 감시 중지');
         return {ok: false};
       }
-      await refresh(job);
+      if (job.nextCheckAt && Date.now() < job.nextCheckAt) return {ok: false};
+      if (!await refresh(job)) return {ok: false, error: '새로고침 실패'};
     } else if (msg.type === 'RESULT') {
       const {job} = await chrome.storage.local.get('job');
-      if (job?.id === msg.id && job.date === msg.date && sender.tab?.id === job.tabId) await stop(msg.message);
+      if (job?.id === msg.id && job.date === msg.date && job.scanId === msg.scanId && sender.tab?.id === job.tabId) await stop(msg.message);
     } else if (msg.type === 'LOG') {
       const {job} = await chrome.storage.local.get('job');
-      if (job?.id === msg.id && job.date === msg.date && sender.tab?.id === job.tabId) await log(`${job.date || ''} ${msg.message}`.trim());
+      if (job?.id === msg.id && job.date === msg.date && job.scanId === msg.scanId && sender.tab?.id === job.tabId) await log(`${job.date || ''} ${msg.message}`.trim());
     }
     return {ok: true};
   }).then(respond, error => respond({ok: false, error: error.message}));
@@ -73,7 +97,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
 chrome.alarms.onAlarm.addListener(alarm => serialized(async () => {
   if (alarm.name !== ALARM) return;
   const {job} = await chrome.storage.local.get('job');
-  if (!job?.active || job.phase !== 'watching') return;
+  if (!job?.active || job.phase !== 'watching' || !job.nextCheckAt || Date.now() < job.nextCheckAt) return;
   try {
     const tab = await chrome.tabs.get(job.tabId);
     const current = new URL(tab.url), expected = new URL(job.url);

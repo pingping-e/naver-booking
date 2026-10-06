@@ -8,6 +8,19 @@ if (config) for (const [name, value] of Object.entries(config)) {
   if (field.type === 'checkbox') field.checked = value;
   else field.value = Array.isArray(value) ? value.join(', ') : value;
 }
+if (!Number.isInteger(Number(config?.intervalMin)) || Number(config.intervalMin) < 5) form.elements.intervalMin.value = '15';
+if (![15,30,60,90,120].includes(Number(config?.intervalMax))) {
+  const legacyMaximum = {'15-30':30, '30-60':60, '60-90':90, '90-180':120};
+  form.elements.intervalMax.value = legacyMaximum[config?.intervalPreset] || ([15,30,60,90,120].includes(Number(config?.interval)) ? Number(config.interval) : 60);
+}
+function renderInterval() {
+  const min = Number(form.elements.intervalMin.value), max = Number(form.elements.intervalMax.value);
+  form.elements.intervalMin.max = String(max);
+  document.querySelector('#interval-rule').textContent = min > max ? '최소 시간을 최대 시간 이하로 지정하세요.' : min === max ? `${min}초 고정 간격입니다. 랜덤 간격을 쓰려면 최소 시간을 더 작게 지정하세요.` : `${min}~${max}초 사이에서 매번 랜덤으로 선택합니다.`;
+}
+form.elements.intervalMin.addEventListener('input',renderInterval);
+for (const radio of document.querySelectorAll('input[name="intervalMax"]')) radio.addEventListener('change',renderInterval);
+renderInterval();
 const dateFields = document.querySelector('#date-fields');
 const addDateButton = document.querySelector('#add-date');
 function dateValues() { return [...dateFields.querySelectorAll('input[type="date"]')].map(input => input.value); }

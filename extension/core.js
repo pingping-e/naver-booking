@@ -15,15 +15,27 @@ export function validate(input) {
   const validTime = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value || '');
   if (['after', 'range'].includes(timeMode) && !validTime(input.timeStart)) throw new Error('시작 시간을 선택하세요.');
   if (timeMode === 'range' && (!validTime(input.timeEnd) || input.timeEnd < input.timeStart)) throw new Error('종료 시간은 시작 시간 이후로 선택하세요.');
-  const interval = Number(input.interval);
-  if (!Number.isFinite(interval) || interval < 15 || interval > 86400) throw new Error('확인 간격은 15~86400초입니다.');
+  let intervalMin, intervalMax;
+  if (input.intervalMin !== undefined || input.intervalMax !== undefined) {
+    intervalMin = Number(input.intervalMin);intervalMax = Number(input.intervalMax);
+    if (!Number.isInteger(intervalMin) || intervalMin < 5 || ![15,30,60,90,120].includes(intervalMax) || intervalMin > intervalMax) throw new Error('최소 시간은 5초 이상, 최대 시간 이하로 지정하고 최대 시간은 15·30·60·90·120초 중에서 선택하세요.');
+  } else if (input.intervalPreset) {
+    const presets = {'15-30': [15,30], '30-60': [30,60], '60-90': [60,90], '90-180': [90,180]};
+    if (!presets[input.intervalPreset]) throw new Error('새로고침 시간 범위를 선택하세요.');
+    [intervalMin, intervalMax] = presets[input.intervalPreset];
+  } else {
+    const interval = Number(input.interval);
+    if (!Number.isFinite(interval) || interval < 15 || interval > 86400) throw new Error('확인 간격은 15~86400초입니다.');
+    intervalMin = intervalMax = interval;
+  }
+  const interval = intervalMin;
   const treatment = input.treatment?.trim() || '필러';
   const source = input.source?.trim() || '유튜브';
   const scope = url.origin + url.pathname.replace(/\/$/, '');
   const formPreferences = input.formPreferences?.scope === scope ? input.formPreferences : null;
   if (formPreferences && (!Array.isArray(formPreferences.fields) || formPreferences.fields.length > 50)) throw new Error('필수 입력 설정을 다시 불러오세요.');
   url.searchParams.set('startDate', uniqueDates[0]);
-  return {...input, timeMode, treatment, source, formPreferences, dates: uniqueDates, date: uniqueDates[0], dateIndex: 0, url: url.href, interval, times: [...new Set(input.times)]};
+  return {...input, timeMode, treatment, source, formPreferences, dates: uniqueDates, date: uniqueDates[0], dateIndex: 0, url: url.href, interval, intervalMin, intervalMax, times: [...new Set(input.times)]};
 }
 
 export function isRequestUrl(job, value) {
@@ -33,4 +45,9 @@ export function isRequestUrl(job, value) {
     const start = current.searchParams.get('startDateTime');
     return !start || (start.startsWith(`${job.date}T`) && (!job.selectedTime || start.slice(11,16) === job.selectedTime));
   } catch {return false;}
+}
+
+export function nextInterval(min, max, random = Math.random) {
+  if (!Number.isInteger(min) || !Number.isInteger(max) || min < 5 || max < min) throw new Error('잘못된 새로고침 범위입니다.');
+  return min + Math.floor(random() * (max - min + 1));
 }

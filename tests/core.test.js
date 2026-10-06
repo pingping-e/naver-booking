@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validate, isRequestUrl} from '../extension/core.js';
+import {validate, isRequestUrl, nextInterval} from '../extension/core.js';
 const base = {url:'https://m.booking.naver.com/booking/13/bizes/1491414/items/7037654',date:'2026-10-06',times:['09:00'],interval:60};
 test('booking URL gets requested date and duplicate slots removed', () => {
  const result=validate({...base,times:['09:00','09:00','10:30']});
@@ -62,4 +62,35 @@ test('time conditions validate bounds and preserve legacy exact/any settings', (
  assert.equal(validate({...base,timeMode:'after',timeStart:'12:00'}).timeStart,'12:00');
  assert.equal(validate({...base,timeMode:'range',timeStart:'14:00',timeEnd:'15:00'}).timeMode,'range');
  for(const patch of [{timeMode:'exact',times:[]},{timeMode:'after',timeStart:''},{timeMode:'range',timeStart:'15:00',timeEnd:'14:00'},{timeMode:'range',timeStart:'14:00',timeEnd:'24:00'},{timeMode:'invalid'}]) assert.throws(()=>validate({...base,...patch}));
+});
+
+test('randomized presets configure exactly the requested ranges', () => {
+ for(const [preset,min,max] of [['15-30',15,30],['30-60',30,60],['60-90',60,90],['90-180',90,180]]) {
+  const result=validate({...base,intervalPreset:preset});
+  assert.equal(result.intervalMin,min);assert.equal(result.intervalMax,max);
+ }
+ assert.throws(()=>validate({...base,intervalPreset:'invalid'}));
+});
+test('random delay includes both bounds and permits consecutive equal draws', () => {
+ for(const [min,max] of [[15,30],[30,60],[60,90],[90,180]]) {
+  assert.equal(nextInterval(min,max,()=>0),min);
+  assert.equal(nextInterval(min,max,()=>0.999999),max);
+  assert.equal(nextInterval(min,max,()=>0.5),nextInterval(min,max,()=>0.5));
+  for(let i=0;i<100;i++){const delay=nextInterval(min,max);assert.ok(Number.isInteger(delay)&&delay>=min&&delay<=max);}
+ }
+});
+
+test('five-second floor and maximum buttons validate every option', () => {
+ for(const max of [15,30,60,90,120]) {
+  const result=validate({...base,intervalMin:5,intervalMax:max});
+  assert.equal(result.intervalMin,5);assert.equal(result.intervalMax,max);
+  assert.equal(nextInterval(5,max,()=>0),5);
+  assert.equal(nextInterval(5,max,()=>0.99999),max);
+ }
+ for(const patch of [{intervalMin:0,intervalMax:30},{intervalMin:31,intervalMax:30},{intervalMin:5,intervalMax:25},{intervalMin:5.5,intervalMax:30}]) assert.throws(()=>validate({...base,...patch}));
+});
+
+test('default 15-to-60-second configuration remains valid', () => {
+ const result=validate({...base,intervalMin:15,intervalMax:60});
+ assert.equal(result.intervalMin,15);assert.equal(result.intervalMax,60);
 });
