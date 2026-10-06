@@ -9,20 +9,30 @@ if (config) for (const [name, value] of Object.entries(config)) {
   else field.value = Array.isArray(value) ? value.join(', ') : value;
 }
 if (!Number.isInteger(Number(config?.intervalMin)) || Number(config.intervalMin) < 5) form.elements.intervalMin.value = '15';
-const extraOptions = [0,15,30,45,60,90,120];
-if (!extraOptions.includes(Number(config?.intervalExtra))) {
+if (!Number.isInteger(Number(config?.intervalExtra)) || Number(config.intervalExtra) < 0 || Number(config.intervalExtra) > 120) {
   const legacyMaximum = {'15-30':30, '30-60':60, '60-90':90, '90-180':180};
   const min = Number(form.elements.intervalMin.value);
   const oldMax = Number(config?.intervalMax ?? legacyMaximum[config?.intervalPreset] ?? config?.interval ?? 60);
   const extra = Math.max(0, oldMax - min);
-  form.elements.intervalExtra.value = extraOptions.find(value => value >= extra) ?? 120;
+  form.elements.intervalExtra.value = Math.min(extra, 120);
 }
 function renderInterval() {
-  const min = Number(form.elements.intervalMin.value), extra = Number(form.elements.intervalExtra.value);
-  document.querySelector('#interval-rule').textContent = extra === 0 ? `${min}초 후 다시 확인합니다.` : `${min}~${min + extra}초 후 다시 확인합니다.`;
+  const minField = form.elements.intervalMin, extraField = form.elements.intervalExtra;
+  const min = Number(minField.value), extra = Number(extraField.value);
+  const minError = minField.value === '' || !Number.isInteger(min) ? '최소 시간을 정수로 입력하세요.' : min < 5 ? '최소 시간은 5초 이상이어야 합니다.' : min > 120 ? '최소 시간은 120초 이하여야 합니다.' : '';
+  const extraError = extraField.value === '' || !Number.isInteger(extra) || extra < 0 || extra > 120 ? '추가 범위는 0~120초의 정수로 입력하세요.' : '';
+  for (const [field, id, message] of [[minField, '#interval-min-error', minError], [extraField, '#interval-extra-error', extraError]]) {
+    field.setCustomValidity(message);
+    field.setAttribute('aria-invalid', String(Boolean(message)));
+    const error = document.querySelector(id);error.textContent = message;error.hidden = !message;
+  }
+  form.querySelector('button[type="submit"]').disabled = Boolean(minError || extraError);
+  document.querySelector('#interval-rule').textContent = minError || extraError ? '' : extra === 0 ? `${min}초 후 다시 확인합니다.` : `${min}~${min + extra}초 후 다시 확인합니다.`;
 }
-form.elements.intervalMin.addEventListener('input',renderInterval);
-for (const radio of document.querySelectorAll('input[name="intervalExtra"]')) radio.addEventListener('change',renderInterval);
+for (const field of [form.elements.intervalMin, form.elements.intervalExtra]) {
+  field.addEventListener('input', renderInterval);
+  field.addEventListener('change', renderInterval);
+}
 renderInterval();
 const dateFields = document.querySelector('#date-fields');
 const addDateButton = document.querySelector('#add-date');

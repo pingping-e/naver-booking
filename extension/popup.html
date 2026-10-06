@@ -22,16 +22,11 @@
 <div id="time-end" hidden><label>종료 시간<input name="timeEnd" type="time" step="60" value="15:00"></label></div>
 <p id="time-rule">예약 가능한 모든 시간을 확인합니다.</p>
 <fieldset><legend>랜덤 새로고침 간격</legend>
-<label>최소 시간 (초, 5초 이상)<input name="intervalMin" type="number" min="5" max="120" step="1" value="15" required></label>
-<p>랜덤으로 더할 시간</p><div id="interval-options">
-<label><input type="radio" name="intervalExtra" value="0">+0초</label>
-<label><input type="radio" name="intervalExtra" value="15">+15초</label>
-<label><input type="radio" name="intervalExtra" value="30">+30초</label>
-<label><input type="radio" name="intervalExtra" value="45" checked>+45초</label>
-<label><input type="radio" name="intervalExtra" value="60">+60초</label>
-<label><input type="radio" name="intervalExtra" value="90">+90초</label>
-<label><input type="radio" name="intervalExtra" value="120">+120초</label>
-</div><p id="interval-rule"></p>
+<label>최소 시간 (초, 5초 이상)<input name="intervalMin" type="number" min="5" max="120" step="1" value="15" aria-describedby="interval-min-error" required></label>
+<p id="interval-min-error" class="field-error" role="alert" hidden></p>
+<label>추가 범위 (초)<input name="intervalExtra" type="number" min="0" max="120" step="1" value="45" aria-describedby="interval-extra-error" required></label>
+<p id="interval-extra-error" class="field-error" role="alert" hidden></p>
+<p id="interval-rule"></p>
 </fieldset>
 <fieldset id="clinic-presets"><legend>현재 참고 상품의 추가정보 기본값</legend>
 <label>시술 선택<select name="treatment">

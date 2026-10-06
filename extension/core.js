@@ -19,7 +19,8 @@ export function validate(input) {
   if (input.intervalExtra !== undefined) {
     intervalMin = Number(input.intervalMin);
     const extra = Number(input.intervalExtra);
-    if (!Number.isInteger(intervalMin) || intervalMin < 5 || intervalMin > 120 || ![0,15,30,45,60,90,120].includes(extra)) throw new Error('최소 시간은 5~120초의 정수, 추가 시간은 표시된 옵션 중에서 선택하세요.');
+    if (input.intervalMin === '' || !Number.isInteger(intervalMin) || intervalMin < 5 || intervalMin > 120) throw new Error('최소 시간은 5~120초의 정수로 입력하세요.');
+    if (input.intervalExtra === '' || !Number.isInteger(extra) || extra < 0 || extra > 120) throw new Error('추가 범위는 0~120초의 정수로 입력하세요.');
     intervalMax = intervalMin + extra;
   } else if (input.intervalMin !== undefined || input.intervalMax !== undefined) {
     intervalMin = Number(input.intervalMin);intervalMax = Number(input.intervalMax);
