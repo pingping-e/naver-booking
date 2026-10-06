@@ -34,6 +34,8 @@ export function validate(input) {
     if (!Number.isFinite(interval) || interval < 15 || interval > 86400) throw new Error('확인 간격은 15~86400초입니다.');
     intervalMin = intervalMax = interval;
   }
+  const partySize = input.partySize == null || String(input.partySize).trim() === '' ? null : Number(input.partySize);
+  if (partySize !== null && (!Number.isInteger(partySize) || partySize < 1 || partySize > 100)) throw new Error('예약 인원은 1~100명 사이의 정수로 입력하거나 비워 두세요.');
   const interval = intervalMin;
   const treatment = input.treatment?.trim() || '제모';
   const source = input.source?.trim() || '네이버 검색';
@@ -41,7 +43,7 @@ export function validate(input) {
   const formPreferences = input.formPreferences?.scope === scope ? input.formPreferences : null;
   if (formPreferences && (!Array.isArray(formPreferences.fields) || formPreferences.fields.length > 50)) throw new Error('필수 입력 설정을 다시 불러오세요.');
   url.searchParams.set('startDate', uniqueDates[0]);
-  return {...input, timeMode, treatment, source, formPreferences, dates: uniqueDates, date: uniqueDates[0], dateIndex: 0, url: url.href, interval, intervalMin, intervalMax, times: [...new Set(input.times)]};
+  return {...input, partySize, timeMode, treatment, source, formPreferences, dates: uniqueDates, date: uniqueDates[0], dateIndex: 0, url: url.href, interval, intervalMin, intervalMax, times: [...new Set(input.times)]};
 }
 
 export function isRequestUrl(job, value) {

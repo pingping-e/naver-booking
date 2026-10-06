@@ -21,6 +21,8 @@
 <div id="time-start" hidden><label>시작 시간<input name="timeStart" type="time" step="60" value="12:00"></label></div>
 <div id="time-end" hidden><label>종료 시간<input name="timeEnd" type="time" step="60" value="15:00"></label></div>
 <p id="time-rule">예약 가능한 모든 시간을 확인합니다.</p>
+<label>예약 인원 (선택)<input name="partySize" type="number" min="1" max="100" step="1" placeholder="비워 두면 사이트 기본 인원"></label>
+<p>인원 선택이 필요한 예약만 입력하세요. 가게에서 허용하는 인원으로 선택합니다.</p>
 <fieldset><legend>랜덤 새로고침 간격</legend>
 <label>최소 시간 (초, 5초 이상)<input name="intervalMin" type="number" min="5" max="120" step="1" value="15" aria-describedby="interval-min-error" required></label>
 <p id="interval-min-error" class="field-error" role="alert" hidden></p>
@@ -68,4 +70,4 @@
 <label class="check"><input name="autoConfirm" type="checkbox"> 최종 확정도 자동 클릭 (예약·결제 발생 가능)</label>
 <p>먼저 네이버에 로그인하세요. 기본 모드는 신청 화면에서 추가정보를 적용한 후 최종 제출 전에 멈춥니다. 브라우저가 열려 있어야 하며 로그인·인증·결제는 직접 처리해야 할 수 있습니다.</p>
 <button type="submit">설정 저장 및 감시 시작</button><button id="stop" type="button">중지</button>
-</form><p id="status" role="status"></p><ul id="logs"></ul><p class="icon-credit">달력 아이콘: <a href="https://icons8.kr/icon/23/calendar" target="_blank" rel="noopener noreferrer">Icons8</a></p><script type="module" src="popup.js"></script></body></html>
+</form><p id="status" role="status"></p><ul id="logs"></ul><p class="icon-credit">달력 아이콘: <a href="https://icons8.kr/icons/set/calendar" target="_blank" rel="noopener noreferrer">Icons8</a></p><script type="module" src="popup.js"></script></body></html>

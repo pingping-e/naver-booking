@@ -106,3 +106,9 @@ test('default 15-to-60-second configuration remains valid', () => {
  const defaultJob=validate({...base,intervalMin:15,intervalExtra:45});
  assert.equal(defaultJob.intervalMax,60);
  });
+
+test('optional party size accepts blank or positive whole numbers only', () => {
+ for(const partySize of [undefined,null,'',' ']) assert.equal(validate({...base,partySize}).partySize,null);
+ for(const partySize of ['1','4','25','100']) assert.equal(validate({...base,partySize}).partySize,Number(partySize));
+ for(const partySize of ['0','-1','2.5','101','invalid']) assert.throws(()=>validate({...base,partySize}),/예약 인원/);
+});

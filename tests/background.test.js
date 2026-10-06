@@ -143,3 +143,12 @@ test('initial navigation errors stop the new job and return a failure', async ()
  for(let i=0;i<7;i++) await message({type:'STOP'});
  assert.equal(state.logs.length,10);
  });
+
+test('restaurant manual continuation persists and refuses final automatic submission',async()=>{
+ const date='2026-10-16',url='https://booking.naver.com/booking/6/bizes/77605/items/4221135';
+ state.job={id:'manual-restaurant',scanId:'manual-scan',tabId:7,active:true,autoConfirm:true,phase:'watching',date,url};
+ assert.equal((await message({type:'CLAIM',id:state.job.id,date,time:'17:00',manualContinuation:true},7,url)).ok,true);
+ assert.equal(state.job.manualContinuation,true);
+ assert.equal((await message({type:'FINAL_CLAIM',id:state.job.id,date},7,url+'/request?startDateTime=2026-10-16T17:00:00')).ok,false);
+ assert.equal(state.job.phase,'booking');
+});

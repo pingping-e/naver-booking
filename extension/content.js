@@ -42,10 +42,19 @@ async function checkBookingDate(job) {
   };
   try {
     if (job.phase === 'booking') {
+      if (job.manualContinuation) { await send('RESULT', {message:'예약 조건을 선택했습니다. 화면에서 나머지 항목과 예약 신청을 직접 완료하세요.'});return; }
       if (location.pathname === requestPath) await finishRequest();
       return;
     }
     if (!await active()) return;
+    if (/^\/booking\/6\//.test(expected.pathname) && globalThis.NaverBookingRestaurant && !NaverBookingRestaurant.isPage(document)) {
+      await wait(() => NaverBookingRestaurant.isPage(document) || document.querySelector('.calendar_title, [data-date]'));
+    }
+    if (globalThis.NaverBookingRestaurant?.isPage(document)) {
+      await NaverBookingRestaurant.scan(document, job, {active, send});return;
+    }
+    let partyApplied = false;
+    if (job.partySize != null) partyApplied = await NaverBookingParty.apply(document, job.partySize, active, {required:false});
     if (/로그인이 필요|로그인해 주세요|자동입력 방지|캡차/.test(document.body.innerText)) { await send('RESULT', {message: '로그인 또는 인증이 필요합니다. 직접 처리 후 다시 시작하세요.'}); return; }
     const dateSelector = job.dateSelector?.replaceAll('{date}', job.date).replaceAll('{day}', String(Number(job.date.slice(-2)))) || `[data-date="${job.date}"], [aria-label="${job.date}"]`;
     const [year, month, day] = job.date.split('-').map(Number);
@@ -124,6 +133,7 @@ async function checkBookingDate(job) {
     const claim = await send('CLAIM', {time: chosen});
     if (!claim?.ok || !await active()) return;
     slot.click();
+    if (job.partySize != null && !partyApplied) await NaverBookingParty.apply(document, job.partySize, active);
     const booking = await wait(() => pick(job.bookingSelector || (document.querySelector('[data-click-code="nextbuttonview.request"]') ? '[data-click-code="nextbuttonview.request"]' : null), el => /^(예약하기|예약|다음|다음단계)$/.test(text(el))));
     if (!booking) throw new Error('예약 진행 버튼을 찾지 못했습니다. 화면을 직접 확인하세요.');
     if (!await active()) return;

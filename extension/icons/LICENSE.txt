@@ -1,10 +1,10 @@
-Icons8 Calendar (icon ID 23, iOS style)
+User-selected Icons8 calendar artwork
 
 Copyright belongs to Icons8 and its applicable rights holders.
 This asset is used under Icons8 free-use terms, which require attribution.
 It is not covered by the former Lucide/Feather MIT or ISC license.
 
-Icon: https://icons8.kr/icon/23/calendar
+Source collection: https://icons8.kr/icons/set/calendar
 License and attribution requirements: https://icons8.com/license
 Full terms: https://icons8.com/terms-and-conditions
 

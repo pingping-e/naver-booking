@@ -47,12 +47,12 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
     else if (msg.type === 'CLAIM') {
       const {job} = await chrome.storage.local.get('job');
       if (!job?.active || job.id !== msg.id || job.date !== msg.date || job.scanId !== msg.scanId || sender.tab?.id !== job.tabId || job.phase !== 'watching') return {ok: false};
-      await chrome.storage.local.set({job: {...job, phase: 'booking', selectedTime: msg.time, status: '예약 진행 중 — 새로고침 중단'}});
+      await chrome.storage.local.set({job: {...job, phase: 'booking', selectedTime: msg.time, manualContinuation:msg.manualContinuation === true, status: '예약 진행 중 — 새로고침 중단'}});
       await chrome.alarms.clear(ALARM);
       await log('시간 선택 완료, 예약 진행 잠금');
     } else if (msg.type === 'FINAL_CLAIM') {
       const {job} = await chrome.storage.local.get('job');
-      if (!job?.active || !job.autoConfirm || job.phase !== 'booking' || job.id !== msg.id || job.date !== msg.date || job.scanId !== msg.scanId || sender.tab?.id !== job.tabId || !isRequestUrl(job, sender.tab.url)) return {ok: false};
+      if (!job?.active || !job.autoConfirm || job.manualContinuation || job.phase !== 'booking' || job.id !== msg.id || job.date !== msg.date || job.scanId !== msg.scanId || sender.tab?.id !== job.tabId || !isRequestUrl(job, sender.tab.url)) return {ok: false};
       await chrome.storage.local.set({job: {...job, phase: 'submitting', status: '예약 신청 제출 중 — 재시도하지 않음'}});
       await log('최종 신청 버튼 1회 클릭 잠금');
     } else if (msg.type === 'SCHEDULE') {
