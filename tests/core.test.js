@@ -22,3 +22,20 @@ test('allow 15-second checks and any-time mode', () => {
  assert.deepEqual(validate({...base,times:[],interval:15}).times,[]);
  assert.equal(validate({...base,interval:15}).interval,15);
 });
+
+test('accept one to five dates, preserve priority and remove duplicates', () => {
+ const dates=['2026-10-06','2026-10-07','2026-10-08','2026-10-09','2026-10-10'];
+ const result=validate({...base,dates});
+ assert.deepEqual(result.dates,dates);
+ assert.equal(result.date,dates[0]);
+ assert.equal(result.dateIndex,0);
+ assert.deepEqual(validate({...base,dates:[dates[1],dates[0],dates[1]]}).dates,[dates[1],dates[0]]);
+});
+test('reject empty, oversized or invalid multi-date lists', () => {
+ for(const dates of [[],Array(6).fill('2026-10-06'),['2026-10-06','2026-02-30'],'2026-10-06']) assert.throws(()=>validate({...base,dates}));
+});
+test('multiple dates require a templated custom date selector', () => {
+ const input={...base,dates:['2026-10-06','2026-10-07']};
+ assert.throws(()=>validate({...input,dateSelector:'[data-date="2026-10-06"]'}));
+ assert.equal(validate({...input,dateSelector:'[data-date="{date}"]'}).dates.length,2);
+});

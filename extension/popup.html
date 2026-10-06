@@ -2,16 +2,22 @@
 <h1>네이버 예약 감시</h1>
 <form id="settings">
 <label>예약 페이지 주소<input name="url" type="url" required placeholder="https://m.booking.naver.com/booking/…"></label>
-<label>원하는 날짜<input name="date" type="date" required></label>
+<fieldset><legend>원하는 날짜 (1~5개, 입력 순서대로 확인)</legend>
+<label>날짜 1<input name="date" type="date" required></label>
+<label>날짜 2 (선택)<input name="date2" type="date"></label>
+<label>날짜 3 (선택)<input name="date3" type="date"></label>
+<label>날짜 4 (선택)<input name="date4" type="date"></label>
+<label>날짜 5 (선택)<input name="date5" type="date"></label>
+</fieldset><p>날짜마다 순서대로 확인합니다. 5일·15초 설정이면 같은 날짜는 약 75초마다 확인합니다 (로딩 시간에 따라 지연).</p>
 <label>원하는 시간 (선택, 비우면 모든 시간)<input name="times" placeholder="09:00, 10:30"></label>
 <label>확인 간격 (초, 최소 15)<input name="interval" type="number" min="15" max="86400" value="15" required></label>
 <details><summary>화면 선택자 설정</summary>
-<p>날짜 기본값: data-date 또는 aria-label의 YYYY-MM-DD. 시간 기본값: 버튼의 HH:mm 텍스트. 실제 화면에서 확인한 CSS 선택자를 입력하세요.</p>
-<label>날짜 버튼 선택자<input name="dateSelector" placeholder='[data-date="2026-10-06"]'></label>
+<p>날짜 기본값: data-date 또는 aria-label의 YYYY-MM-DD. 시간 기본값: 버튼의 HH:mm 텍스트. 기본 인식이 되면 비워두세요. 아래 도움말에서 선택자를 찾는 방법을 확인하세요.</p>
+<label>날짜 버튼 선택자<input name="dateSelector" placeholder='[data-date="{date}"]'></label>
 <label>시간 버튼 선택자<input name="timeSelector" placeholder='button[data-time="{time}"]'></label>
-<label>예약 진행 버튼 선택자<input name="bookingSelector" placeholder="비어 있으면 예약하기 / 예약 / 다음"></label>
+<label>예약 진행 버튼 선택자<input name="bookingSelector" placeholder="비어 있으면 예약하기 / 예약 / 다음 / 다음단계"></label>
 <label>최종 확정 버튼 선택자<input name="confirmSelector"></label>
-</details>
+<p>날짜 선택자의 {date}는 YYYY-MM-DD, {day}는 일 숫자로 바뀝니다. 여러 날짜를 등록할 때 고정 날짜 선택자는 사용할 수 없습니다.</p><a href="selectors.html" target="_blank">선택자를 어디서 찾나요? (설명 보기)</a></details>
 <label class="check"><input name="autoConfirm" type="checkbox"> 최종 확정도 자동 클릭 (예약·결제 발생 가능)</label>
 <p>먼저 네이버에 로그인하세요. 기본 모드는 예약 진행 버튼 클릭 후 멈춥니다. 브라우저가 열려 있어야 하며 로그인·인증·결제는 직접 처리해야 할 수 있습니다.</p>
 <button type="submit">설정 저장 및 감시 시작</button><button id="stop" type="button">중지</button>

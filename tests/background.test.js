@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 let listener, alarmListener;
 let state = {job:{id:'a',tabId:7,active:true,phase:'watching'}};
 let reloads=0, clears=0;
+const updates=[];
 globalThis.chrome = {
  runtime:{onMessage:{addListener(fn){listener=fn;}},onStartup:{addListener(){}}},
  storage:{local:{async get(){return structuredClone(state);},async set(value){Object.assign(state,value);}}},
  alarms:{async clear(){clears++;},onAlarm:{addListener(fn){alarmListener=fn;}}},
- tabs:{onRemoved:{addListener(){}},async reload(){reloads++;}}
+ tabs:{onRemoved:{addListener(){}},async reload(){reloads++;},async update(tabId,options){updates.push({tabId,...options});},async get(){return {url:state.job.url};}}
 };
 await import('../extension/background.js');
 const message=(msg,tabId=7)=>new Promise(resolve=>listener(msg,{tab:{id:tabId,url:'https://m.booking.naver.com/booking/1'}},resolve));
@@ -39,4 +40,23 @@ test('short-interval refresh validates job and tab before reloading', async () =
  state.job.phase='booking';
  assert.equal((await message({type:'RECHECK',id:'b'})).ok,false);
  assert.equal(reloads,1);
+});
+
+test('dates rotate for short timers and alarms; stale date cannot book', async () => {
+ state.job={id:'multi',tabId:7,active:true,phase:'watching',dates:['2026-10-06','2026-10-07','2026-10-08'],date:'2026-10-06',dateIndex:0,url:'https://m.booking.naver.com/booking/1?startDate=2026-10-06'};
+ assert.equal((await message({type:'RECHECK',id:'multi',date:'2026-10-06'})).ok,true);
+ assert.equal(state.job.date,'2026-10-07');
+ assert.equal(new URL(updates.at(-1).url).searchParams.get('startDate'),'2026-10-07');
+ assert.equal((await message({type:'CLAIM',id:'multi',date:'2026-10-06'})).ok,false);
+ await message({type:'RESULT',id:'multi',date:'2026-10-06',message:'stale'});
+ assert.equal(state.job.active,true);
+ await alarmListener({name:'booking-watch'});
+ assert.equal(state.job.date,'2026-10-08');
+ await message({type:'RECHECK',id:'multi',date:'2026-10-08'});
+ assert.equal(state.job.date,'2026-10-06');
+ assert.equal(state.job.dateIndex,0);
+ assert.equal(updates.length,3);
+ assert.equal((await message({type:'CLAIM',id:'multi',date:'2026-10-06'})).ok,true);
+ await alarmListener({name:'booking-watch'});
+ assert.equal(updates.length,3);
 });
