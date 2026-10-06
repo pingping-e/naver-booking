@@ -11,8 +11,8 @@
 </fieldset><p>날짜마다 순서대로 확인합니다. 5일·15초 설정이면 같은 날짜는 약 75초마다 확인합니다 (로딩 시간에 따라 지연).</p>
 <label>원하는 시간 (선택, 비우면 모든 시간)<input name="times" placeholder="09:00, 10:30"></label>
 <label>확인 간격 (초, 최소 15)<input name="interval" type="number" min="15" max="86400" value="15" required></label>
-<details><summary>화면 선택자 설정</summary>
-<p>날짜 기본값: data-date 또는 aria-label의 YYYY-MM-DD. 시간 기본값: 버튼의 HH:mm 텍스트. 기본 인식이 되면 비워두세요. 아래 도움말에서 선택자를 찾는 방법을 확인하세요.</p>
+<details><summary>고급 설정 (기본값으로 작동하지 않을 때만)</summary>
+<p>날짜·시간·다음단계 버튼은 자동 인식합니다. 참고 상품의 달력, 오전/오후 시간 구역과 다음단계 버튼을 확인해 반영했습니다. 기본 인식이 되면 비워두세요. 아래 도움말에서 선택자를 찾는 방법을 확인하세요.</p>
 <label>날짜 버튼 선택자<input name="dateSelector" placeholder='[data-date="{date}"]'></label>
 <label>시간 버튼 선택자<input name="timeSelector" placeholder='button[data-time="{time}"]'></label>
 <label>예약 진행 버튼 선택자<input name="bookingSelector" placeholder="비어 있으면 예약하기 / 예약 / 다음 / 다음단계"></label>

@@ -7,7 +7,7 @@
   const send = (type, extra = {}) => chrome.runtime.sendMessage({type, id: job.id, date: job.date, ...extra});
   // The background validates tab identity before allowing any booking action.
   const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
-  const enabled = el => visible(el) && !el.disabled && el.getAttribute('aria-disabled') !== 'true' && !el.closest('[inert]') && !/(?:^|[ _-])disabled(?:[ _-]|$)/i.test(el.className || '');
+  const enabled = el => visible(el) && !el.disabled && el.getAttribute('aria-disabled') !== 'true' && !el.closest('[inert]') && !/(?:^|[ _-])(?:disabled|unselectable)(?:[ _-]|$)/i.test(el.className || '');
   const text = el => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
   const unique = list => { const items = [...list].filter(enabled); if (items.length > 1) throw new Error('같은 조건의 버튼이 여러 개입니다. 선택자를 더 구체적으로 지정하세요.'); return items[0]; };
   const pick = (selector, fallback) => unique(selector ? document.querySelectorAll(selector) : [...document.querySelectorAll('button, a, [role="button"]')].filter(fallback));
@@ -44,20 +44,32 @@
     if (!date) { await send('LOG', {message: '날짜 버튼을 찾지 못했습니다. 날짜 선택자를 설정하세요.'}); return; }
     if (!await active()) return;
     date.click();
+    if (!job.dateSelector && date.matches('.calendar_date')) {
+      const selected = await wait(() => document.querySelector('.calendar_date.selected .num')?.textContent.trim() === String(Number(job.date.slice(-2))));
+      if (!selected) throw new Error('선택한 날짜를 확인하지 못했습니다.');
+    }
+    if (date.classList.contains('closed')) {
+      await send('LOG', {message: '해당 날짜는 마감 상태입니다.'});
+      return;
+    }
     await new Promise(r => setTimeout(r, 700));
     let chosen;
     const slot = await wait(() => {
       if (!job.times.length) {
         // Keep explicit time-only selectors; a {time} template requires a requested time.
         const selector = job.timeSelector && !job.timeSelector.includes('{time}') ? job.timeSelector : null;
-        const candidates = selector ? document.querySelectorAll(selector) : document.querySelectorAll('button, a, [role="button"]');
-        const found = [...candidates].find(el => enabled(el) && NaverBookingSlots.parseTime(text(el)) && !/마감|매진|불가/.test(text(el)));
-        if (found) { chosen = NaverBookingSlots.parseTime(text(found)); return found; }
+        const nativeSlots = document.querySelectorAll('.time_area button.btn_time');
+        const candidates = selector ? document.querySelectorAll(selector) : nativeSlots.length ? nativeSlots : document.querySelectorAll('button, a, [role="button"]');
+        const found = [...candidates].find(el => enabled(el) && NaverBookingSlots.readTime(el) && !/마감|매진|불가/.test(text(el)));
+        if (found) { chosen = NaverBookingSlots.readTime(found); return found; }
         return null;
       }
       for (const time of job.times) {
         const selector = job.timeSelector?.replaceAll('{time}', time);
-        const found = pick(selector, el => text(el) === time);
+        const nativeSlots = document.querySelectorAll('.time_area button.btn_time');
+        const found = selector ? pick(selector) : nativeSlots.length
+          ? unique([...nativeSlots].filter(el => NaverBookingSlots.readTime(el) === time))
+          : pick(null, el => NaverBookingSlots.readTime(el) === time);
         if (found) {chosen = time; return found;}
       }
     });
@@ -65,7 +77,7 @@
     const claim = await send('CLAIM');
     if (!claim?.ok || !await active()) return;
     slot.click();
-    const booking = await wait(() => pick(job.bookingSelector, el => /^(예약하기|예약|다음|다음단계)$/.test(text(el))));
+    const booking = await wait(() => pick(job.bookingSelector || (document.querySelector('[data-click-code="nextbuttonview.request"]') ? '[data-click-code="nextbuttonview.request"]' : null), el => /^(예약하기|예약|다음|다음단계)$/.test(text(el))));
     if (!booking) throw new Error('예약 진행 버튼을 찾지 못했습니다. 화면을 직접 확인하세요.');
     if (!await active()) return;
     booking.click();
