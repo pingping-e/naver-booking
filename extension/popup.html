@@ -3,13 +3,24 @@
 <form id="settings">
 <label>예약 페이지 주소<input name="url" type="url" required placeholder="https://m.booking.naver.com/booking/…"></label>
 <fieldset><legend>원하는 날짜 (1~5개, 입력 순서대로 확인)</legend>
-<label>날짜 1<input name="date" type="date" required></label>
-<label>날짜 2 (선택)<input name="date2" type="date"></label>
-<label>날짜 3 (선택)<input name="date3" type="date"></label>
-<label>날짜 4 (선택)<input name="date4" type="date"></label>
-<label>날짜 5 (선택)<input name="date5" type="date"></label>
+<div id="date-fields"><label>날짜 1<input name="date" type="date" required></label></div>
+<button id="add-date" type="button">+ 날짜 추가</button>
 </fieldset><p>날짜마다 순서대로 확인합니다. 5일·15초 설정이면 같은 날짜는 약 75초마다 확인합니다 (로딩 시간에 따라 지연).</p>
-<label>원하는 시간 (선택, 비우면 모든 시간)<input name="times" placeholder="09:00, 10:30"></label>
+<label>시간 조건<select name="timeMode">
+<option value="any">전체 시간 — 아무 때나</option>
+<option value="exact">특정 시간 선택</option>
+<option value="after">지정 시간 이후</option>
+<option value="range">시간 범위</option>
+</select></label>
+<div id="exact-times" hidden>
+<label>시간 선택<input id="time-picker" type="time" step="60"></label>
+<button id="add-time" type="button">+ 선택한 시간 추가</button>
+<div id="time-chips"></div><input name="times" type="hidden">
+<p>하나 이상 추가하세요. 추가한 순서대로 우선 확인합니다.</p>
+</div>
+<div id="time-start" hidden><label>시작 시간<input name="timeStart" type="time" step="60" value="12:00"></label></div>
+<div id="time-end" hidden><label>종료 시간<input name="timeEnd" type="time" step="60" value="15:00"></label></div>
+<p id="time-rule">예약 가능한 모든 시간을 확인합니다.</p>
 <label>확인 간격 (초, 최소 15)<input name="interval" type="number" min="15" max="86400" value="15" required></label>
 <fieldset id="clinic-presets"><legend>현재 참고 상품의 추가정보 기본값</legend>
 <label>시술 선택<select name="treatment">

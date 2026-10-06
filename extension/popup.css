@@ -5,3 +5,7 @@ fieldset{border:1px solid #aab9b0;border-radius:5px;padding:8px}a{color:#087d44}
 select{width:100%;box-sizing:border-box;padding:8px;margin-top:4px;border:1px solid #aab9b0;border-radius:5px}
 
 textarea{width:100%;box-sizing:border-box;min-height:70px}select[multiple]{min-height:100px}
+
+.date-row{display:flex;align-items:flex-end;gap:8px}.date-row label{flex:1;min-width:0}.remove-date{margin:0 0 10px;background:#53645b;padding:9px}button:disabled{opacity:.55;cursor:default}
+
+#time-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.time-chip{padding:6px 9px;margin:0;background:#e0eee5;color:#172b23}

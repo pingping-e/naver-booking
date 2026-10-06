@@ -87,12 +87,13 @@
     await new Promise(r => setTimeout(r, 700));
     let chosen;
     const slot = await wait(() => {
-      if (!job.times.length) {
+      const timeMode = job.timeMode || (job.times.length ? 'exact' : 'any');
+      if (timeMode !== 'exact') {
         // Keep explicit time-only selectors; a {time} template requires a requested time.
         const selector = job.timeSelector && !job.timeSelector.includes('{time}') ? job.timeSelector : null;
         const nativeSlots = document.querySelectorAll('.time_area button.btn_time');
         const candidates = selector ? document.querySelectorAll(selector) : nativeSlots.length ? nativeSlots : document.querySelectorAll('button, a, [role="button"]');
-        const found = [...candidates].find(el => enabled(el) && NaverBookingSlots.readTime(el) && !/마감|매진|불가/.test(text(el)));
+        const found = [...candidates].find(el => enabled(el) && NaverBookingSlots.isAllowed(NaverBookingSlots.readTime(el), job) && !/마감|매진|불가/.test(text(el)));
         if (found) { chosen = NaverBookingSlots.readTime(found); return found; }
         return null;
       }
@@ -105,7 +106,7 @@
         if (found) {chosen = time; return found;}
       }
     });
-    if (!slot) { await send('LOG', {message: job.times.length ? '원하는 시간의 활성 버튼 없음' : '예약 가능한 시간 없음'}); return; }
+    if (!slot) { await send('LOG', {message: '설정한 시간 조건에 맞는 예약 가능 시간이 없습니다.'}); return; }
     const claim = await send('CLAIM', {time: chosen});
     if (!claim?.ok || !await active()) return;
     slot.click();

@@ -11,6 +11,15 @@ globalThis.NaverBookingSlots = {
     } else if (hour > 23) return null;
     return `${String(hour).padStart(2, '0')}:${match[3]}`;
   },
+  isAllowed(time, settings) {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time || '')) return false;
+    const mode = settings.timeMode || (settings.times?.length ? 'exact' : 'any');
+    if (mode === 'any') return true;
+    if (mode === 'exact') return settings.times?.includes(time) || false;
+    if (mode === 'after') return !!settings.timeStart && time >= settings.timeStart;
+    if (mode === 'range') return !!settings.timeStart && !!settings.timeEnd && time >= settings.timeStart && time <= settings.timeEnd;
+    return false;
+  },
   readTime(element) {
     const list = element.closest('.time_list');
     const title = list?.previousElementSibling;

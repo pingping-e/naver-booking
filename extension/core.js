@@ -9,6 +9,12 @@ export function validate(input) {
   const uniqueDates = [...new Set(dates)];
   if (uniqueDates.length > 1 && input.dateSelector?.trim() && !/\{date\}|\{day\}/.test(input.dateSelector)) throw new Error('여러 날짜의 날짜 선택자에는 {date} 또는 {day}를 포함하세요. 기본 인식은 비워두세요.');
   if (!Array.isArray(input.times) || input.times.some(t => !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) throw new Error('시간은 09:00, 10:30 형식으로 입력하세요.');
+  const timeMode = input.timeMode || (input.times.length ? 'exact' : 'any');
+  if (!['any', 'exact', 'after', 'range'].includes(timeMode)) throw new Error('시간 조건을 선택하세요.');
+  if (timeMode === 'exact' && !input.times.length) throw new Error('특정 시간을 하나 이상 추가하세요.');
+  const validTime = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value || '');
+  if (['after', 'range'].includes(timeMode) && !validTime(input.timeStart)) throw new Error('시작 시간을 선택하세요.');
+  if (timeMode === 'range' && (!validTime(input.timeEnd) || input.timeEnd < input.timeStart)) throw new Error('종료 시간은 시작 시간 이후로 선택하세요.');
   const interval = Number(input.interval);
   if (!Number.isFinite(interval) || interval < 15 || interval > 86400) throw new Error('확인 간격은 15~86400초입니다.');
   const treatment = input.treatment?.trim() || '필러';
@@ -17,7 +23,7 @@ export function validate(input) {
   const formPreferences = input.formPreferences?.scope === scope ? input.formPreferences : null;
   if (formPreferences && (!Array.isArray(formPreferences.fields) || formPreferences.fields.length > 50)) throw new Error('필수 입력 설정을 다시 불러오세요.');
   url.searchParams.set('startDate', uniqueDates[0]);
-  return {...input, treatment, source, formPreferences, dates: uniqueDates, date: uniqueDates[0], dateIndex: 0, url: url.href, interval, times: [...new Set(input.times)]};
+  return {...input, timeMode, treatment, source, formPreferences, dates: uniqueDates, date: uniqueDates[0], dateIndex: 0, url: url.href, interval, times: [...new Set(input.times)]};
 }
 
 export function isRequestUrl(job, value) {

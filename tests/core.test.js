@@ -55,3 +55,11 @@ test('saved required fields are only applied to their matching product', () => {
  assert.deepEqual(validate({...base,formPreferences:profile}).formPreferences,profile);
  assert.equal(validate({...base,formPreferences:{...profile,scope:'https://booking.naver.com/booking/other'}}).formPreferences,null);
 });
+
+test('time conditions validate bounds and preserve legacy exact/any settings', () => {
+ assert.equal(validate(base).timeMode,'exact');
+ assert.equal(validate({...base,times:[]}).timeMode,'any');
+ assert.equal(validate({...base,timeMode:'after',timeStart:'12:00'}).timeStart,'12:00');
+ assert.equal(validate({...base,timeMode:'range',timeStart:'14:00',timeEnd:'15:00'}).timeMode,'range');
+ for(const patch of [{timeMode:'exact',times:[]},{timeMode:'after',timeStart:''},{timeMode:'range',timeStart:'15:00',timeEnd:'14:00'},{timeMode:'range',timeStart:'14:00',timeEnd:'24:00'},{timeMode:'invalid'}]) assert.throws(()=>validate({...base,...patch}));
+});

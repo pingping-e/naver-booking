@@ -8,8 +8,62 @@ if (config) for (const [name, value] of Object.entries(config)) {
   if (field.type === 'checkbox') field.checked = value;
   else field.value = Array.isArray(value) ? value.join(', ') : value;
 }
-if (config?.dates) config.dates.forEach((date, index) => {
-  form.elements.namedItem(index === 0 ? 'date' : `date${index + 1}`).value = date;
+const dateFields = document.querySelector('#date-fields');
+const addDateButton = document.querySelector('#add-date');
+function dateValues() { return [...dateFields.querySelectorAll('input[type="date"]')].map(input => input.value); }
+function renderDates(values) {
+  dateFields.replaceChildren();
+  (values.length ? values : ['']).slice(0, 5).forEach((value, index) => {
+    const row = document.createElement('div');row.className = 'date-row';
+    const label = document.createElement('label');label.textContent = `날짜 ${index + 1}`;
+    const input = document.createElement('input');input.type = 'date';input.name = index === 0 ? 'date' : `date${index + 1}`;input.required = true;input.value = value;
+    label.append(input);row.append(label);
+    if (index > 0) {
+      const remove = document.createElement('button');remove.type = 'button';remove.className = 'remove-date';remove.textContent = '삭제';remove.setAttribute('aria-label', `날짜 ${index + 1} 삭제`);
+      remove.addEventListener('click', () => { const dates = dateValues();dates.splice(index, 1);renderDates(dates); });
+      row.append(remove);
+    }
+    dateFields.append(row);
+  });
+  const count = dateValues().length;
+  addDateButton.disabled = count >= 5;
+  addDateButton.textContent = count >= 5 ? '최대 5개까지 추가할 수 있습니다' : '+ 날짜 추가';
+}
+const savedDates = config?.dates?.length ? config.dates : ['date', 'date2', 'date3', 'date4', 'date5'].map(name => config?.[name]).filter(Boolean);
+renderDates(savedDates);
+addDateButton.addEventListener('click', () => {
+  const dates = dateValues();
+  if (dates.length >= 5) return;
+  renderDates([...dates, '']);
+  dateFields.querySelector('.date-row:last-child input').focus();
+});
+let selectedTimes = [...new Set(config?.times || [])];
+function renderTimes() {
+  document.querySelector('#time-chips').replaceChildren(...selectedTimes.map((time, index) => {
+    const chip = document.createElement('button');chip.type = 'button';chip.className = 'time-chip';chip.textContent = `${time} ×`;chip.setAttribute('aria-label', `${time} 삭제`);
+    chip.addEventListener('click', () => { selectedTimes.splice(index, 1);renderTimes(); });
+    return chip;
+  }));
+  form.elements.times.value = selectedTimes.join(', ');
+}
+renderTimes();
+if (!config?.timeMode) form.elements.timeMode.value = selectedTimes.length ? 'exact' : 'any';
+function renderTimeMode() {
+  const mode = form.elements.timeMode.value;
+  document.querySelector('#exact-times').hidden = mode !== 'exact';
+  document.querySelector('#time-start').hidden = !['after', 'range'].includes(mode);
+  document.querySelector('#time-end').hidden = mode !== 'range';
+  form.elements.timeStart.required = ['after', 'range'].includes(mode);
+  form.elements.timeEnd.required = mode === 'range';
+  document.querySelector('#time-rule').textContent = mode === 'any' ? '예약 가능한 모든 시간을 확인합니다.' : mode === 'exact' ? '추가한 시간 중 예약 가능한 시간을 선택합니다.' : mode === 'after' ? '시작 시간을 포함해 그 이후를 확인합니다.' : '시작·종료 시간을 모두 포함합니다. 같은 날짜 안의 범위를 지정하세요.';
+}
+form.elements.timeMode.addEventListener('change', renderTimeMode);
+renderTimeMode();
+document.querySelector('#add-time').addEventListener('click', () => {
+  const input = document.querySelector('#time-picker');
+  if (!input.value || !input.checkValidity()) {status.textContent = '추가할 시간을 선택하세요.';input.focus();return;}
+  if (!selectedTimes.includes(input.value)) selectedTimes.push(input.value);
+  renderTimes();
 });
 function scopeForUrl(value) {
   try { const url = new URL(value); return url.origin + url.pathname.replace(/\/$/, ''); } catch { return ''; }
@@ -92,7 +146,7 @@ async function render() {
 form.addEventListener('submit', async event => {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(form));
-  data.dates = ['date', 'date2', 'date3', 'date4', 'date5'].map(name => data[name]).filter(Boolean);
+  data.dates = dateValues().filter(Boolean);
   data.times = data.times.split(',').map(t => t.trim()).filter(Boolean);
   data.autoConfirm = form.elements.autoConfirm.checked;
   try {
