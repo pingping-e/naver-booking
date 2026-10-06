@@ -51,6 +51,7 @@ test('generic text values dispatch input and change for controlled fields',async
   get value(){return this._value;}
   set value(value){this._value=value;}
   checkValidity(){return this._value.length>0;}
+  getAttribute(){return null;}
   dispatchEvent(event){this.events.push(event.type);}
  }
  globalThis.HTMLInputElement=Input;
@@ -59,4 +60,41 @@ test('generic text values dispatch input and change for controlled fields',async
  await fill(root([title]),[{key:'field:요청사항',type:'text',value:'창가 자리 요청'}]);
  assert.equal(input.value,'창가 자리 요청');
  assert.deepEqual(input.events,['input','change']);
+});
+
+function customFixture({selected='선택하세요',option='확인했습니다.',disabled=false,duplicate=false}={}) {
+ let current=selected,clicks=0,opened=false;
+ const visible={getClientRects:()=>[{}],getAttribute:()=>null};
+ const choice={...visible,textContent:option,disabled,click(){clicks++;current=option;opened=false;}};
+ const list={...visible,id:'list',querySelectorAll:()=>duplicate ? [choice,choice] : [choice]};
+ const button={...visible,tagName:'BUTTON',type:'button',getAttribute:name=>name==='aria-haspopup' ? 'listbox' : name==='aria-controls' ? 'list' : null,querySelector:()=>({textContent:current}),click(){opened=true;}};
+ const title={textContent:'영유아 포함 인원수로 예약해주세요*필수',querySelector:()=>({})};
+ const group={querySelector:()=>title,querySelectorAll:()=>[button]};
+ const root={querySelectorAll:selector=>selector.includes('ExtraInputForm') ? [group] : selector==='[role="listbox"]' && opened ? [list] : []};
+ const settings=[{key:'field:영유아 포함 인원수로 예약해주세요',type:'customselect',value:'확인했습니다.'}];
+ return {root,settings,read:()=>current,clicks:()=>clicks};
+}
+globalThis.getComputedStyle=()=>({visibility:'visible'});
+test('custom required dropdowns expose their current label without React-generated IDs',()=>{
+ const fixture=customFixture({selected:'확인했습니다.'});
+ const [field]=NaverBookingForm.discover(fixture.root);
+ assert.equal(field.key,fixture.settings[0].key);assert.equal(field.type,'customselect');assert.equal(field.value,'확인했습니다.');
+});
+test('custom dropdown selects only the saved exact option and verifies state',async()=>{
+ const fixture=customFixture();await fill(fixture.root,fixture.settings);
+ assert.equal(fixture.read(),'확인했습니다.');assert.equal(fixture.clicks(),1);
+});
+test('already matching custom selections do not click or reopen the list',async()=>{
+ const fixture=customFixture({selected:'확인했습니다.'});await fill(fixture.root,fixture.settings);
+ assert.equal(fixture.clicks(),0);
+});
+test('missing, disabled and duplicate custom options do not choose a substitute',async()=>{
+ for(const settings of [{option:'다른 옵션'},{disabled:true},{duplicate:true}]){
+  const fixture=customFixture(settings);
+  await assert.rejects(()=>fill(fixture.root,fixture.settings),/정확하게 찾지/);
+  assert.equal(fixture.clicks(),0);
+ }
+});
+test('stop prevents custom dropdown selections',async()=>{
+ const fixture=customFixture();await assert.rejects(()=>fill(fixture.root,fixture.settings,async()=>false),/중지/);assert.equal(fixture.clicks(),0);
 });

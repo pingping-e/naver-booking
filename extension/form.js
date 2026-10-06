@@ -1,13 +1,14 @@
 // Discover required fields from the user's logged-in reservation request page.
 globalThis.NaverBookingForm = {
-  clean(text) { return text.replace(/\s+/g, ' ').replace(/필수|required/gi, '').trim(); },
+  clean(text) { return text.replace(/\s+/g, ' ').replace(/[*＊]?\s*(?:필수|required)/gi, '').trim(); },
+  selectedText(button) {return button.querySelector('[class*="Select__text__"]')?.textContent.trim() || '';},
   discover(root) {
     const fields = [], consumed = new Set();
     const add = (label, controls) => {
       if (!controls.length) throw new Error(`${label}: 지원하는 필수 입력 요소를 찾지 못했습니다.`);
       controls.forEach(el => consumed.add(el));
       const first = controls[0];
-      const type = first.tagName === 'SELECT' ? 'select' : first.tagName === 'TEXTAREA' ? 'textarea' : first.type || 'text';
+      const type = first.getAttribute('aria-haspopup') === 'listbox' ? 'customselect' : first.tagName === 'SELECT' ? 'select' : first.tagName === 'TEXTAREA' ? 'textarea' : first.type || 'text';
       if (first.multiple && type === 'select') throw new Error(`${label}: 다중 선택 드롭다운은 직접 입력하세요.`);
       if (['checkbox', 'radio'].includes(type) && controls.some(control => control.type !== type)) throw new Error(`${label}: 혼합된 입력 요소는 직접 입력하세요.`);
       if (['password', 'file', 'hidden', 'submit', 'button'].includes(type)) throw new Error(`${label}: 자동 입력을 지원하지 않는 항목입니다.`);
@@ -18,12 +19,17 @@ globalThis.NaverBookingForm = {
         ? controls.map(el => ({value: el.value, label: this.clean(el.closest('label')?.textContent || el.value), disabled: el.disabled || el.getAttribute('aria-disabled') === 'true'}))
         : type === 'select' ? [...first.options].map(el => ({value: el.value, label: el.textContent.trim(), disabled: el.disabled})) : [];
       if (options.length && new Set(options.map(option => option.value)).size !== options.length) throw new Error(`${label}: 옵션 값을 구분하지 못했습니다.`);
-      const value = ['checkbox', 'radio'].includes(type) ? controls.filter(el => el.checked).map(el => el.value) : first.value;
+      const value = type === 'customselect' ? this.selectedText(first) : ['checkbox', 'radio'].includes(type) ? controls.filter(el => el.checked).map(el => el.value) : first.value;
       fields.push({key, label, type, options, value, controls});
     };
     const titles = [...root.querySelectorAll('.booking_inner .form_title')].filter(el => el.querySelector('.necessary_text') || el.getAttribute('aria-required') === 'true');
     for (const title of titles) {
       add(this.clean(title.textContent), [...title.parentElement.querySelectorAll('input:not([type="hidden"]), select, textarea')]);
+    }
+    for (const group of root.querySelectorAll('[class*="ExtraInputForm__field__"][role="group"]')) {
+      const title=group.querySelector('[class*="ExtraInputForm__title__"]');
+      if (!title?.querySelector('[class*="ExtraInputForm__required__"]')) continue;
+      add(this.clean(title.textContent), [...group.querySelectorAll('input:not([type="hidden"]), select, textarea, button[aria-haspopup="listbox"]')]);
     }
     for (const control of root.querySelectorAll('input[required], select[required], textarea[required], input[aria-required="true"], select[aria-required="true"], textarea[aria-required="true"]')) {
       if (consumed.has(control) || control.disabled) continue;
@@ -51,7 +57,29 @@ globalThis.NaverBookingForm = {
         if (!key) throw new Error(`${field.label}: 최종 페이지에서 필수 입력을 미리 설정하세요.`);
         desired = [preferences[key]];
       }
-      if (['checkbox', 'radio'].includes(field.type)) {
+      if (field.type === 'customselect') {
+        if (typeof desired !== 'string' || !desired.trim()) throw new Error(`${field.label}: 선택할 문구를 지정하세요.`);
+        const button=field.controls[0];
+        if (!await active()) throw new Error('작업이 중지되었습니다.');
+        if (this.selectedText(button) === desired) continue;
+        const visible=el=>el.getClientRects().length && getComputedStyle(el).visibility!=='hidden';
+        const enabled=el=>visible(el) && !el.disabled && el.getAttribute('aria-disabled')!=='true';
+        if (!enabled(button)) throw new Error(`${field.label}: 선택 목록을 열 수 없습니다.`);
+        button.click();
+        const wait=async fn=>{const end=Date.now()+15000;do{if(!await active())throw new Error('작업이 중지되었습니다.');const result=fn();if(result)return result;await new Promise(resolve=>setTimeout(resolve,150));}while(Date.now()<end);return null;};
+        const list=await wait(()=>{
+          const id=button.getAttribute('aria-controls');
+          const lists=[...root.querySelectorAll('[role="listbox"]')].filter(visible).filter(el=>!id || el.id===id);
+          if(lists.length>1)throw new Error(`${field.label}: 선택 목록을 구분하지 못했습니다.`);
+          return lists[0];
+        });
+        if (!list) throw new Error(`${field.label}: 선택 목록이 준비되지 않았습니다.`);
+        const choices=[...list.querySelectorAll('[role="option"]')].filter(el=>el.textContent.trim()===desired && enabled(el));
+        if (choices.length!==1) throw new Error(`${field.label}: 지정한 옵션을 정확하게 찾지 못했습니다.`);
+        if (!await active()) throw new Error('작업이 중지되었습니다.');
+        choices[0].click();
+        if (!await wait(()=>this.selectedText(button)===desired)) throw new Error(`${field.label}: 선택 결과를 확인하지 못했습니다.`);
+      } else if (['checkbox', 'radio'].includes(field.type)) {
         const values = Array.isArray(desired) ? desired : [desired];
         if (!values.length || (field.type === 'radio' && values.length !== 1)) throw new Error(`${field.label}: 필수 선택 값을 지정하세요.`);
         for (const value of values) {
@@ -87,10 +115,18 @@ globalThis.NaverBookingForm = {
   }
 };
 if (globalThis.chrome?.runtime?.onMessage) chrome.runtime.onMessage.addListener((message, sender, respond) => {
-  if (message.type !== 'INSPECT_FORM') return;
-  try {
-    if (!/\/request\/?$/.test(location.pathname)) throw new Error('최종 예약 신청 페이지에서 불러오세요.');
+  if (!['INSPECT_FORM','APPLY_FORM'].includes(message.type)) return;
+  (async()=>{
+    if (!/^\/booking\/\d+\/bizes\/\d+\/items\/\d+\/request(?:\/link)?\/?$/.test(location.pathname)) throw new Error('최종 예약 신청 페이지에서 불러오세요.');
+    const scope=location.origin + location.pathname.replace(/\/request(?:\/link)?\/?$/, '');
+    if(message.type==='APPLY_FORM') {
+      if(message.profile?.scope!==scope)throw new Error('저장한 설정과 현재 예약 상품이 다릅니다.');
+      const href=location.href;
+      await NaverBookingForm.fill(document,message.profile.fields,async()=>location.href===href);
+      return {ok:true};
+    }
     const fields = NaverBookingForm.discover(document).map(({controls, ...field}) => field);
-    respond({ok: true, scope: location.origin + location.pathname.replace(/\/request\/?$/, ''), fields});
-  } catch (error) {respond({ok: false, error: error.message});}
+    return {ok: true, scope, fields};
+  })().then(respond,error=>respond({ok:false,error:error.message}));
+  return true;
 });

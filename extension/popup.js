@@ -159,7 +159,18 @@ document.querySelector('#save-fields').addEventListener('click',async()=>{
     const {formProfiles:latest={}}=await chrome.storage.local.get('formProfiles');
     Object.assign(formProfiles,latest,{[profile.scope]:profile});
     await chrome.storage.local.set({formProfiles, config:{...config,url:profile.scope,formPreferences:profile}});
-    status.textContent='필수 입력을 저장했습니다. 감시 시작 시 적용됩니다. 실행 중이면 중지 후 다시 시작하세요.';
+    status.textContent='필수 입력을 저장했습니다. 현재 신청 화면에는 입력 적용 버튼으로 반영할 수 있습니다.';
+  } catch(error) {status.textContent=error.message;}
+});
+document.querySelector('#apply-fields').addEventListener('click',async()=>{
+  try {
+    const profile=readFields();
+    if (!profile) throw new Error('먼저 필수 항목을 불러오세요.');
+    const [tab]=await chrome.tabs.query({active:true,currentWindow:true});
+    if(!tab?.id || !/^https:\/\/(m\.)?booking\.naver\.com\//.test(tab.url || ''))throw new Error('네이버 예약 신청 탭을 열고 다시 시도하세요.');
+    const response=await chrome.tabs.sendMessage(tab.id,{type:'APPLY_FORM',profile});
+    if(!response?.ok)throw new Error(response?.error || '입력 적용에 실패했습니다.');
+    status.textContent='필수 입력을 적용했습니다. 예약 내용을 확인하고 직접 신청하세요.';
   } catch(error) {status.textContent=error.message;}
 });
 async function render() {
