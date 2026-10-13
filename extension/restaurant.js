@@ -2,6 +2,7 @@
 globalThis.NaverBookingRestaurant = {
   isPage(root) {return !!root.querySelector('[data-testid="gbw-flow-step1"], button[class*="CtaBar__btn_book"]');},
   async scan(root, job, {active, send, continueFlow}) {
+    const loadTimeout=message=>Object.assign(new Error(message),{code:'BOOKING_LOAD_TIMEOUT'});
     const text=el=>(el.innerText || el.textContent || '').replace(/\s+/g,' ').trim();
     const visible=el=>el.getClientRects().length && getComputedStyle(el).visibility!=='hidden';
     const enabled=el=>visible(el) && !el.disabled && el.getAttribute('aria-disabled')!=='true' && !/Disabled|(?:^|[ _-])disabled(?:[ _-]|$)/i.test(el.className || '');
@@ -9,7 +10,8 @@ globalThis.NaverBookingRestaurant = {
     let widget=root.querySelector('[data-testid="gbw-flow-step1"]');
     if(!widget){
       const open=await wait(()=>root.querySelector('button[class*="CtaBar__btn_book"]'));
-      if(!open || !enabled(open))throw new Error('인원·날짜 선택 화면을 열지 못했습니다.');
+      if(!open)throw loadTimeout('인원·날짜 선택 화면이 준비되지 않았습니다.');
+      if(!enabled(open))throw new Error('인원·날짜 선택 화면을 열지 못했습니다.');
       // A server-rendered entry button may appear before its click handler hydrates.
       for(let attempt=0;attempt<3 && !widget;attempt++) {
         if(!await active())return;
@@ -23,14 +25,17 @@ globalThis.NaverBookingRestaurant = {
         }
       }
     }
-    if(!widget)throw new Error('예약 조건 화면이 준비되지 않았습니다.');
+    if(!widget)throw loadTimeout('예약 조건 화면이 준비되지 않았습니다.');
     if(job.partySize!=null)await NaverBookingParty.apply(root,job.partySize,active);
     else if(!Number(widget.getAttribute('data-gbw-step1-people')))throw new Error('이 예약은 인원 선택이 필요합니다. 확장 설정에 예약 인원을 입력하세요.');
     const people=Number(widget.getAttribute('data-gbw-step1-people'));
     const [year,month,day]=job.date.split('-').map(Number),targetMonth=year*12+month;
     const label=()=>widget.querySelector('[class*="_monthLabel_"]');
     const readMonth=()=>{const match=label()&&text(label()).match(/(20\d{2})\s*[.년/-]\s*(\d{1,2})/);return match?Number(match[1])*12+Number(match[2]):null;};
-    if(!await wait(()=>readMonth()!==null && !widget.querySelector('[data-skeleton="true"]') && widget.querySelector('[class*="_dayGrid_"] [class*="_day_"]')))throw new Error('식당 예약 달력이 준비되지 않았습니다.');
+    if(!await wait(()=>readMonth()!==null && !widget.querySelector('[data-skeleton="true"]') && widget.querySelector('[class*="_dayGrid_"] [class*="_day_"]'))) {
+      if(label()?.textContent.trim() && readMonth()===null && !widget.querySelector('[data-skeleton="true"]'))throw new Error('식당 달력의 날짜 형식을 인식하지 못했습니다.');
+      throw loadTimeout('식당 예약 달력이 준비되지 않았습니다.');
+    }
     for(let step=0;readMonth()!==targetMonth && step<24;step++){
       const previous=readMonth();
       const arrow=widget.querySelector(previous<targetMonth?'button[aria-label="다음달"], button[aria-label="Next month"]':'button[aria-label="이전달"], button[aria-label="Previous month"]');
@@ -45,7 +50,7 @@ globalThis.NaverBookingRestaurant = {
     if(!await active())return;dates[0].click();
     if(!await wait(()=>Number(widget.getAttribute('data-gbw-step1-day'))===day && readMonth()===targetMonth))throw new Error('선택한 예약 날짜를 확인하지 못했습니다.');
     const ready=await wait(()=>!widget.querySelector('[data-skeleton="true"]') && (widget.querySelector('[class*="_timePeriodGrid_"] button') || /예약 가능한 시간이 없습니다|예약 마감|예약할 수 있는 시간이 없/.test(text(widget))));
-    if(!ready)throw new Error('예약 시간 목록을 확인하지 못했습니다.');
+    if(!ready)throw loadTimeout('예약 시간 목록을 확인하지 못했습니다.');
     const slots=[...widget.querySelectorAll('[class*="_timePeriodGrid_"] button')].filter(enabled).map(el=>{
       const grid=el.closest('[class*="_timePeriodGrid_"]');
       const period=grid.parentElement.querySelector('[class*="_timePeriodLabel_"]')?.textContent || '';

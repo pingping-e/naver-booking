@@ -26,6 +26,15 @@ try{
  let page=await open();
  assert.equal(await page.locator('[id^="apply-"], .manual-tools, #save-party, #save-stage, #save-fields').count(),0);
  assert.equal(await page.locator('input[name$="Selector"]').count(),0);
+ const startsBeforeDateCheck=messages.filter(m=>m.type==='START').length;
+ await page.locator('#date-fields input').first().fill('2000-01-01');
+ assert.equal(await page.locator('.date-error').first().isVisible(),true);
+ assert.equal(await page.locator('button[type="submit"]').isDisabled(),true);
+ await page.locator('[name="intervalExtra"]').fill('30');assert.equal(await page.locator('button[type="submit"]').isDisabled(),true);
+ await page.evaluate(()=>document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+ assert.equal(messages.filter(m=>m.type==='START').length,startsBeforeDateCheck);assert.deepEqual(saved.job,job);
+ await page.locator('#date-fields input').first().fill('2026-10-16');await page.locator('[name="intervalExtra"]').fill('45');
+ assert.equal(await page.locator('.date-error').first().isVisible(),false);assert.equal(await page.locator('button[type="submit"]').isDisabled(),false);
  assert.equal(await page.locator('#notification-sound').inputValue(),'alert');
  await page.locator('#notification-sound').selectOption('bell');
  await page.waitForFunction(()=>document.querySelector('#sound-status').textContent.includes('저장했습니다'));

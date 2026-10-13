@@ -1,6 +1,6 @@
 {
   "name": "naver-booking-watch",
-  "version": "0.1.30",
+  "version": "0.1.31",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,8 @@
     "verify:extension": "node scripts/verify-extension.mjs",
     "verify:popup": "node scripts/verify-popup.mjs",
     "verify:setup": "node scripts/verify-setup.mjs",
-    "verify:audio": "node scripts/verify-audio.mjs"
+    "verify:audio": "node scripts/verify-audio.mjs",
+    "verify:recovery": "node scripts/verify-recovery.mjs"
   },
   "devDependencies": {
     "playwright": "^1.64.0"

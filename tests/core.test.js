@@ -1,7 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validate, isRequestUrl, nextInterval} from '../extension/core.js';
+import {validate as validateAt, isRequestUrl, nextInterval,todayInKorea} from '../extension/core.js';
+const validate=input=>validateAt(input,Date.UTC(2026,9,1));
 const base = {url:'https://m.booking.naver.com/booking/13/bizes/1491414/items/7037654',date:'2026-10-06',times:['09:00'],interval:60};
+test('past dates are rejected at Korean midnight while today and future dates are allowed',()=>{
+ const before=Date.parse('2026-10-12T14:59:59Z'),after=Date.parse('2026-10-12T15:00:00Z');
+ assert.equal(todayInKorea(before),'2026-10-12');assert.equal(todayInKorea(after),'2026-10-13');
+ assert.equal(validateAt({...base,date:'2026-10-12'},before).date,'2026-10-12');
+ assert.throws(()=>validateAt({...base,date:'2026-10-12'},after),/지난 날짜/);
+ assert.equal(validateAt({...base,date:'2026-10-13'},after).date,'2026-10-13');
+ assert.throws(()=>validateAt({...base,dates:['2026-10-14','2026-10-12']},after),/지난 날짜/);
+ assert.deepEqual(validateAt({...base,dates:['2026-10-14','2026-10-15']},after).dates,['2026-10-14','2026-10-15']);
+});
 test('booking URL gets requested date and duplicate slots removed', () => {
  const result=validate({...base,times:['09:00','09:00','10:30']});
  assert.equal(new URL(result.url).searchParams.get('startDate'),base.date);

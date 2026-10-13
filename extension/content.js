@@ -15,6 +15,12 @@ async function checkBookingDate(job) {
   const pick = (selector, fallback) => unique(selector ? document.querySelectorAll(selector) : [...document.querySelectorAll('button, a, [role="button"]')].filter(fallback));
   const wait = async fn => { const deadline = Date.now() + 15000; do { const found = fn(); if (found) return found; await new Promise(r => setTimeout(r, 300)); } while (Date.now() < deadline); return null; };
   const active = async () => { const {job: latest} = await chrome.storage.local.get('job'); return latest?.id === job.id && latest.date === job.date && latest.scanId === job.scanId && latest.active; };
+  const loadTimeout=message=>Object.assign(new Error(message),{code:'BOOKING_LOAD_TIMEOUT'});
+  let recoveryHandled=false;
+  const queueReload=nextCheckAt=>{
+    const recheck=async()=>{const remaining=nextCheckAt-Date.now();if(remaining>0){setTimeout(recheck,remaining);return;}await send('RECHECK').catch(()=>{});};
+    setTimeout(recheck,Math.max(0,nextCheckAt-Date.now()));
+  };
   const seen=async step=>{const result=await send('STAGE_SEEN',{step});if(!result?.ok)throw new Error(result?.error || '사전 확인한 단계를 현재 작업에 연결하지 못했습니다.');};
   const finishRequest = async () => {
     const current = new URL(location.href);
@@ -125,15 +131,16 @@ async function checkBookingDate(job) {
       return;
     }
     if (!await active()) return;
+    if (/로그인이 필요|로그인해 주세요|자동입력 방지|캡차/.test(document.body.innerText)) { await send('RESULT', {message: '로그인 또는 인증이 필요합니다. 직접 처리 후 다시 시작하세요.'}); return; }
     if (/^\/booking\/6\//.test(expected.pathname) && globalThis.NaverBookingRestaurant && !NaverBookingRestaurant.isPage(document)) {
-      await wait(() => NaverBookingRestaurant.isPage(document) || document.querySelector('.calendar_title, [data-date]') || job.dateSelector && document.querySelector(job.dateSelector.replaceAll('{date}',job.date).replaceAll('{day}',String(Number(job.date.slice(-2))))));
+      const pageReady=await wait(() => NaverBookingRestaurant.isPage(document) || document.querySelector('.calendar_title, [data-date]') || job.dateSelector && document.querySelector(job.dateSelector.replaceAll('{date}',job.date).replaceAll('{day}',String(Number(job.date.slice(-2))))));
+      if(!pageReady)throw loadTimeout('예약 페이지가 아직 준비되지 않았습니다.');
     }
     if (globalThis.NaverBookingRestaurant?.isPage(document)) {
       await NaverBookingRestaurant.scan(document, job, {active, send, continueFlow});return;
     }
     let partyApplied = false;
     if (job.partySize != null) partyApplied = await NaverBookingParty.apply(document, job.partySize, active, {required:false});
-    if (/로그인이 필요|로그인해 주세요|자동입력 방지|캡차/.test(document.body.innerText)) { await send('RESULT', {message: '로그인 또는 인증이 필요합니다. 직접 처리 후 다시 시작하세요.'}); return; }
     const dateSelector = job.dateSelector?.replaceAll('{date}', job.date).replaceAll('{day}', String(Number(job.date.slice(-2)))) || `[data-date="${job.date}"], [aria-label="${job.date}"]`;
     const [year, month, day] = job.date.split('-').map(Number);
     const targetMonth = year * 12 + month;
@@ -171,7 +178,10 @@ async function checkBookingDate(job) {
       }
     }
     // A query parameter alone is not proof of the selected calendar date.
-    if (!date) throw new Error('날짜 버튼이 준비되지 않아 예약 가능 여부를 확인하지 못했습니다. 화면을 확인한 뒤 다시 시작하세요.');
+    if (!date) {
+      if(document.querySelector('.calendar_table button.calendar_date') && !document.querySelector('[data-skeleton="true"], [aria-busy="true"]'))throw new Error('달력에서 원하는 날짜를 확인하지 못했습니다. 화면 구조와 예약 조건을 확인하세요.');
+      throw loadTimeout('날짜 버튼이 준비되지 않아 예약 가능 여부를 확인하지 못했습니다.');
+    }
     if (!await active()) return;
     if (date.classList.contains('closed')) {
       await send('LOG', {message: '예약 불가'});return;
@@ -206,7 +216,10 @@ async function checkBookingDate(job) {
         if (found) {chosen = time; return found;}
       }
     });
-    if (!slot) { await send('LOG', {message: '예약 불가'}); return; }
+    if (!slot) {
+      if(document.querySelector('[data-skeleton="true"], [aria-busy="true"]'))throw loadTimeout('예약 시간 목록이 아직 로딩 중입니다.');
+      await send('LOG', {message: '예약 불가'});return;
+    }
     await send('LOG', {message: `예약 가능: ${chosen}`});
     const claim = await send('CLAIM', {time: chosen});
     if (!claim?.ok || !await active()) return;
@@ -222,18 +235,22 @@ async function checkBookingDate(job) {
     if (!await active()) return;
     booking.click();
     await continueFlow();
-  } catch (error) { if(await active())await send('RESULT', {message: `안전 중지: ${error.message}`}); }
+  } catch (error) {
+    if(await active()) {
+      if(error.code==='BOOKING_LOAD_TIMEOUT') {
+        const result=await send('RETRY_LOAD',{code:error.code}).catch(()=>null);
+        recoveryHandled=!!result?.ok && !!result.handled;
+        if(recoveryHandled && result.nextCheckAt)queueReload(result.nextCheckAt);
+      }
+      if(!recoveryHandled)await send('RESULT', {message: `안전 중지: ${error.message}`});
+    }
+  }
   finally {
-    const schedule = await send('SCHEDULE').catch(() => null);
+    const schedule = recoveryHandled ? null : await send('SCHEDULE').catch(() => null);
     if (schedule?.ok && schedule.nextJob) {
       await checkBookingDate(schedule.nextJob);
     } else if (schedule?.ok && schedule.nextCheckAt) {
-      const recheck = async () => {
-        const remaining = schedule.nextCheckAt - Date.now();
-        if (remaining > 0) { setTimeout(recheck, remaining);return; }
-        await send('RECHECK').catch(() => {});
-      };
-      setTimeout(recheck, Math.max(0, schedule.nextCheckAt - Date.now()));
+      queueReload(schedule.nextCheckAt);
     }
   }
 }

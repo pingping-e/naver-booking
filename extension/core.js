@@ -1,5 +1,9 @@
 import {stageKey} from './preflight.js';
-export function validate(input) {
+export function todayInKorea(now=Date.now()) {
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now).map(part=>[part.type,part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+export function validate(input,now=Date.now()) {
   if(input.autoConfirm!==undefined && typeof input.autoConfirm!=='boolean')throw new Error('자동 신청 설정은 체크박스로 지정하세요.');
   const url = new URL(input.url);
   const product=url.pathname.match(/^(\/booking\/\d+\/bizes\/\d+\/items\/\d+)(?:\/request(?:\/link)?)?\/?$/);
@@ -7,8 +11,10 @@ export function validate(input) {
   if(url.pathname!==product[1]){url.pathname=product[1];url.search='';}
   const dates = input.dates ?? [input.date];
   if (!Array.isArray(dates) || dates.length < 1 || dates.length > 5) throw new Error('날짜는 1~5개 선택하세요.');
+  const today=todayInKorea(now);
   for (const date of dates) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || new Date(`${date}T00:00:00Z`).toISOString().slice(0,10) !== date) throw new Error('날짜를 확인하세요.');
+    if(date<today)throw new Error(`${date}: 지난 날짜는 등록할 수 없습니다.`);
   }
   const uniqueDates = [...new Set(dates)];
   if (uniqueDates.length > 1 && input.dateSelector?.trim() && !/\{date\}|\{day\}/.test(input.dateSelector)) throw new Error('여러 날짜의 날짜 선택자에는 {date} 또는 {day}를 포함하세요. 기본 인식은 비워두세요.');

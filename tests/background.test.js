@@ -1,6 +1,7 @@
-import test from 'node:test';
+import test,{mock} from 'node:test';
 import assert from 'node:assert/strict';
 let listener, alarmListener;
+const clockStart=Date.UTC(2026,9,13);mock.timers.enable({apis:['Date'],now:clockStart});
 let state = {job:{id:'a',tabId:7,active:true,phase:'watching'}};
 let reloads=0, clears=0;
 const updates=[];
@@ -37,11 +38,11 @@ test('stale result cannot stop current job; stop prevents further claim',async()
 });
 
 test('short-interval refresh validates job and tab before reloading', async () => {
- state.job={id:'b',tabId:7,active:true,phase:'watching',url:'https://m.booking.naver.com/booking/1',nextCheckAt:Date.now()-1};
+ state.job={id:'b',tabId:7,active:true,phase:'watching',date:'2026-10-16',url:'https://m.booking.naver.com/booking/1',nextCheckAt:Date.now()-1};
  assert.equal((await message({type:'RECHECK',id:'old'})).ok,false);
  assert.equal((await message({type:'RECHECK',id:'b'},8)).ok,false);
  assert.equal(reloads,0);
- assert.equal((await message({type:'RECHECK',id:'b'})).ok,true);
+ assert.equal((await message({type:'RECHECK',id:'b',date:state.job.date})).ok,true);
  assert.equal(reloads,1);
  state.job.phase='booking';
  assert.equal((await message({type:'RECHECK',id:'b'})).ok,false);
@@ -122,9 +123,9 @@ test('each scan schedules a one-shot randomized check; duplicate schedule reuses
 });
 
 test('reload errors stop the job instead of leaving an unscheduled active watcher', async () => {
- state.job={id:'failure',scanId:'fail-scan',tabId:7,active:true,phase:'watching',url:'https://m.booking.naver.com/booking/1',nextCheckAt:Date.now()-1};
+ state.job={id:'failure',scanId:'fail-scan',tabId:7,active:true,phase:'watching',date:'2026-10-16',url:'https://m.booking.naver.com/booking/1',nextCheckAt:Date.now()-1};
  failReload=true;
- const response=await message({type:'RECHECK',id:'failure'});
+ const response=await message({type:'RECHECK',id:'failure',date:state.job.date});
  failReload=false;
  assert.equal(response.ok,false);assert.equal(state.job.active,false);
  assert.match(state.job.status,/새로고침 또는 날짜 전환 실패/);
@@ -344,4 +345,51 @@ test('final alerts play once and sound failures never block submission',async()=
  assert.equal(soundMessages.length,before+1);assert.match(state.notificationDiagnostics.detail,/소리 재생 실패/);
  assert.equal((await message(event,7,scope+'/request')).ok,true);assert.equal(soundMessages.length,before+1);
  assert.equal((await message({type:'FINAL_CLAIM',id:state.job.id,date},7,scope+'/request')).ok,true);
+});
+test('loading retries are capped, deduplicated, and never apply after booking begins',async()=>{
+ const url='https://booking.naver.com/booking/13/bizes/123/items/456',date='2026-10-16';
+ state.job={id:'retry',scanId:'r1',tabId:7,phase:'watching',active:true,url,date,dates:[date,'2026-10-23'],intervalMin:15,intervalMax:60};
+ const retry=()=>({type:'RETRY_LOAD',id:state.job.id,date:state.job.date,scanId:state.job.scanId,code:'BOOKING_LOAD_TIMEOUT'});
+ const beforeReloads=reloads,beforeAlerts=notifications.length,beforeSounds=soundMessages.length;
+ for(const patch of [{id:'old'},{scanId:'old'},{code:'SCHEMA_MISMATCH'}])assert.equal((await message({...retry(),...patch},7,url)).ok,false);
+ assert.equal((await message(retry(),8,url)).ok,false);assert.equal((await message(retry(),7,url+'/request')).ok,false);
+ const first=await message(retry(),7,url);assert.equal(first.nextCheckAt,Date.now()+5000);assert.equal(state.job.loadRetryCount,1);
+ await message(retry(),7,url);assert.equal(state.job.loadRetryCount,1);assert.equal(reloads,beforeReloads);
+ assert.equal((await message({type:'RECHECK',id:state.job.id,date},7,url)).ok,false);
+ mock.timers.setTime(Date.now()+5000);
+ assert.equal((await message({type:'RECHECK',id:state.job.id,date},7,url)).ok,true);assert.equal(reloads,beforeReloads+1);
+ // Success on the first date must not reset the budget for a failed later date.
+ await message({type:'SCHEDULE',id:state.job.id,date},7,url);assert.equal(state.job.loadRetryCount,1);
+ const second=await message(retry(),7,url);assert.equal(state.job.loadRetryCount,2);
+ mock.timers.setTime(second.nextCheckAt);
+ await message({type:'RECHECK',id:state.job.id,date:state.job.date},7,url);assert.equal(reloads,beforeReloads+2);
+ await message(retry(),7,url);assert.equal(state.job.active,false);assert.match(state.job.status,/재시도 2회/);
+ for(const phase of ['booking','submitting']) {
+  state.job={...state.job,active:true,phase,nextCheckAt:null};const snapshot=structuredClone(state.job);
+  assert.equal((await message(retry(),7,url)).ok,false);assert.deepEqual(state.job,snapshot);
+ }
+ assert.equal(notifications.length,beforeAlerts);assert.equal(soundMessages.length,beforeSounds);
+ mock.timers.setTime(clockStart);
+});
+test('a complete successful scan resets the loading retry budget',async()=>{
+ const url='https://booking.naver.com/booking/13/bizes/123/items/456';
+ state.job={id:'retry-reset',scanId:'reset',tabId:7,phase:'watching',active:true,url,date:'2026-10-16',dates:['2026-10-16'],loadRetryCount:2,intervalMin:15,intervalMax:15};
+ await message({type:'SCHEDULE',id:state.job.id,date:state.job.date},7,url);assert.equal(state.job.loadRetryCount,0);
+});
+test('expired dates cannot start and are removed during refresh after Korean midnight',async()=>{
+ const url='https://booking.naver.com/booking/13/bizes/123/items/456';
+ const beforeUpdates=updates.length;
+ assert.equal((await message({type:'START',config:{url,date:'2026-10-12',times:[],interval:60}})).ok,false);assert.equal(updates.length,beforeUpdates);
+ try {
+  mock.timers.setTime(Date.parse('2026-10-13T15:00:00Z'));
+  state.job={id:'midnight',scanId:'expired',tabId:7,phase:'watching',active:true,url,date:'2026-10-13',dates:['2026-10-13','2026-10-15'],nextCheckAt:Date.now()-1};
+  const before=reloads,beforeNavigations=updates.length;
+  assert.equal((await message({type:'RECHECK',id:state.job.id,date:state.job.date},7,url)).ok,true);
+  assert.equal(reloads,before);assert.equal(updates.length,beforeNavigations+1);assert.equal(new URL(updates.at(-1).url).searchParams.get('startDate'),'2026-10-15');assert.deepEqual(state.job.dates,['2026-10-15']);assert.equal(state.job.date,'2026-10-15');
+  state.job={...state.job,id:'all-expired',scanId:'old',date:'2026-10-13',dates:['2026-10-13'],nextCheckAt:Date.now()-1};
+  assert.equal((await message({type:'CLAIM',id:state.job.id,date:state.job.date,time:'14:00'},7,url)).ok,false);
+  assert.equal(state.job.active,false);assert.match(state.job.status,/날짜가 모두 지나/);assert.equal(reloads,before);assert.equal(updates.length,beforeNavigations+1);
+  state.job={...state.job,id:'expired-submit',active:true,phase:'booking',autoConfirm:true};
+  assert.equal((await message({type:'FINAL_CLAIM',id:state.job.id,date:state.job.date},7,url+'/request')).ok,false);assert.equal(state.job.active,false);assert.match(state.job.status,/최종 신청을 중지/);
+ }finally{mock.timers.setTime(clockStart);}
 });

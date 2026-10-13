@@ -1,5 +1,6 @@
 import {preflight,stageKey,stepSchema} from './preflight.js';
 import {notificationSounds,soundChoice} from './notification-sounds.js';
+import {todayInKorea} from './core.js';
 const form = document.querySelector('form'), status = document.querySelector('#status');
 const extensionVersion=chrome.runtime.getManifest?.().version;
 document.querySelector('#extension-version').textContent=extensionVersion ? `확장 버전 ${extensionVersion}` : '';
@@ -22,6 +23,7 @@ document.querySelector('#preview-notification-sound').addEventListener('click',a
 });
 const config={...storedConfig,...scheduleDraft};
 let currentForm = null;
+let hasPastDates=false;
 let partyProfileScope = '';
 let currentStage = null;
 let inspectedStage = null;
@@ -134,7 +136,7 @@ function renderComposition() {
   const error=!enabled ? '' : !inputs.length ? '인원 구성 화면에서 필수 항목을 먼저 불러오세요.' : invalid ? '항목별 인원을 0~100명의 정수로 입력하세요.' : !Number.isInteger(size) || size<1 || sum!==size ? `인원 구성 합계(${sum}명)가 예약 인원과 같아야 합니다.` : '';
   form.elements.usePartyComposition.setCustomValidity(error);
   const message=document.querySelector('#party-composition-error');message.textContent=error;message.hidden=!error;
-  form.querySelector('button[type="submit"]').disabled=!!error || form.elements.intervalMin.getAttribute('aria-invalid')==='true' || form.elements.intervalExtra.getAttribute('aria-invalid')==='true';
+  form.querySelector('button[type="submit"]').disabled=hasPastDates || !!error || form.elements.intervalMin.getAttribute('aria-invalid')==='true' || form.elements.intervalExtra.getAttribute('aria-invalid')==='true';
 }
 function renderPartyProfile(profile) {
   partyProfileScope=profile?.scope || '';
@@ -167,13 +169,24 @@ renderInterval();
 const dateFields = document.querySelector('#date-fields');
 const addDateButton = document.querySelector('#add-date');
 function dateValues() { return [...dateFields.querySelectorAll('input[type="date"]')].map(input => input.value); }
+function renderDateValidation() {
+  const today=todayInKorea();hasPastDates=false;
+  for(const input of dateFields.querySelectorAll('input[type="date"]')) {
+    const message=input.value && input.value<today ? '지난 날짜는 등록할 수 없습니다.' : '';
+    input.min=today;input.setCustomValidity(message);input.setAttribute('aria-invalid',String(!!message));
+    const error=input.closest('label').querySelector('.date-error');error.textContent=message;error.hidden=!message;
+    hasPastDates ||= !!message;
+  }
+  renderComposition();
+}
 function renderDates(values) {
   dateFields.replaceChildren();
   (values.length ? values : ['']).slice(0, 5).forEach((value, index) => {
     const row = document.createElement('div');row.className = 'date-row';
     const label = document.createElement('label');label.textContent = `날짜 ${index + 1}`;
     const input = document.createElement('input');input.type = 'date';input.name = index === 0 ? 'date' : `date${index + 1}`;input.required = true;input.value = value;
-    label.append(input);row.append(label);
+    const error=document.createElement('p');error.className='date-error field-error';error.hidden=true;error.setAttribute('role','alert');
+    label.append(input,error);row.append(label);
     if (index > 0) {
       const remove = document.createElement('button');remove.type = 'button';remove.className = 'remove-date';remove.textContent = '삭제';remove.setAttribute('aria-label', `날짜 ${index + 1} 삭제`);
       remove.addEventListener('click', () => { const dates = dateValues();dates.splice(index, 1);renderDates(dates);saveSchedule(); });
@@ -183,6 +196,7 @@ function renderDates(values) {
   });
   const count = dateValues().length;
   addDateButton.disabled = count >= 5;
+  renderDateValidation();
   addDateButton.textContent = count >= 5 ? '최대 5개까지 추가할 수 있습니다' : '+ 날짜 추가';
 }
 const savedDates = config?.dates?.length ? config.dates : ['date', 'date2', 'date3', 'date4', 'date5'].map(name => config?.[name]).filter(Boolean);
@@ -225,6 +239,8 @@ document.querySelector('#add-time').addEventListener('click', () => {
 });
 document.querySelector('#time-picker').value=config.timePicker || '';
 function saveSchedule() {
+  renderDateValidation();
+  if(hasPastDates){document.querySelector('#schedule-save-status').textContent='지난 날짜를 변경해 주세요. 유효한 날짜만 자동 저장됩니다.';return;}
   const draft={dates:dateValues(),timeMode:form.elements.timeMode.value,times:[...selectedTimes],timeStart:form.elements.timeStart.value,timeEnd:form.elements.timeEnd.value,timePicker:document.querySelector('#time-picker').value};
   chrome.runtime.sendMessage({type:'SAVE_SCHEDULE_DRAFT',draft}).then(response=>{
     const notice=document.querySelector('#schedule-save-status');
@@ -421,6 +437,8 @@ async function render() {
 }
 form.addEventListener('submit', async event => {
   event.preventDefault();
+  renderDateValidation();
+  if(hasPastDates){status.textContent='지난 날짜를 변경한 뒤 감시를 시작하세요.';return;}
   const data = Object.fromEntries(new FormData(form));
   data.dates = dateValues().filter(Boolean);
   data.times = data.times.split(',').map(t => t.trim()).filter(Boolean);
