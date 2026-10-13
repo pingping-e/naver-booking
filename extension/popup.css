@@ -1,0 +1,25 @@
+html{width:452px;min-width:452px}
+body{width:420px;min-width:420px;margin:16px;font:15px system-ui;color:#172b23}h1{font-size:22px}label{display:block;margin:10px 0}input:not([type=checkbox]){box-sizing:border-box;width:100%;padding:8px;margin-top:4px;border:1px solid #aab9b0;border-radius:5px}.check{display:flex;gap:8px}button{padding:10px;margin-right:6px;border:0;border-radius:5px;background:#087d44;color:white;cursor:pointer}#stop{background:#53645b}p{font-size:13px;line-height:1.6}ul{padding-left:18px;font-size:12px;max-height:170px;overflow:auto}li{margin-bottom:8px}
+
+fieldset{border:1px solid #aab9b0;border-radius:5px;padding:8px}a{color:#087d44}
+
+select{width:100%;box-sizing:border-box;padding:8px;margin-top:4px;border:1px solid #aab9b0;border-radius:5px}
+
+textarea{width:100%;box-sizing:border-box;min-height:70px}select[multiple]{min-height:100px}
+
+.date-row{display:flex;align-items:flex-end;gap:8px}.date-row label{flex:1;min-width:0}.remove-date{margin:0 0 10px;background:#53645b;padding:9px}button:disabled{opacity:.55;cursor:default}
+
+#time-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.time-chip{padding:6px 9px;margin:0;background:#e0eee5;color:#172b23}
+
+.field-error{color:#c62828;margin:4px 0}input[aria-invalid="true"]{border-color:#c62828}
+
+button.secondary{background:#edf3ef;color:#224e38;border:1px solid #b8c8bf}#schedule-save-status{color:#53645b}button[type=submit]{font-weight:700;font-size:15px}
+
+*,*::before,*::after{box-sizing:border-box}
+body{overflow-wrap:anywhere}
+fieldset{min-inline-size:0;width:100%;max-width:100%;margin-inline:0}
+legend{max-width:100%;white-space:normal}
+input,select,textarea{min-width:0;max-width:100%}
+input,select,textarea,button{font:inherit}
+button{max-width:100%;white-space:normal}
+#form-fields,#stage-fields,#party-count-fields,details{min-width:0;max-width:100%}

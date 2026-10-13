@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "minimum_chrome_version": "116",
+  "name": "네이버 예약 시간 감시",
+  "version": "0.1.30",
+  "description": "설정한 날짜와 시간을 주기적으로 확인하고 예약 진행을 돕습니다.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs",
+    "notifications",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://m.booking.naver.com/*",
+    "https://booking.naver.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://m.booking.naver.com/*",
+        "https://booking.naver.com/*"
+      ],
+      "js": [
+        "composition.js",
+        "stages.js",
+        "slots.js",
+        "form.js",
+        "party.js",
+        "restaurant.js",
+        "setup.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}

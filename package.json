@@ -1,0 +1,18 @@
+{
+  "name": "naver-booking-watch",
+  "version": "0.1.30",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check extension/background.js && node --check extension/content.js && node --check extension/popup.js && node --check extension/slots.js && node --check extension/form.js && node --check extension/party.js && node --check extension/restaurant.js && node --check extension/composition.js && node --check extension/stages.js && node --check extension/setup.js && node --check extension/preflight.js && node --check extension/notification-sounds.js && node --check extension/notification-audio.js && node --check extension/offscreen.js",
+    "verify:browser": "node scripts/verify-browser.mjs",
+    "verify:extension": "node scripts/verify-extension.mjs",
+    "verify:popup": "node scripts/verify-popup.mjs",
+    "verify:setup": "node scripts/verify-setup.mjs",
+    "verify:audio": "node scripts/verify-audio.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.0"
+  }
+}

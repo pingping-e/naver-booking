@@ -1,0 +1,118 @@
+import {chromium} from 'playwright';
+import {readFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const root=new URL('../extension/',import.meta.url);
+const scope='https://booking.naver.com/booking/6/bizes/77605/items/4221135';
+const job={active:true,date:'2026-10-16',times:['17:00'],phase:'watching',status:'감시 중'};
+const saved={config:{url:scope,dates:['2026-10-16'],times:['17:00'],timeMode:'exact'},job:structuredClone(job)};
+const messages=[];
+let reply;
+let notificationTestStatus='requested';
+const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_EXECUTABLE_PATH ? {executablePath:process.env.PLAYWRIGHT_EXECUTABLE_PATH} : {})});
+async function open(){
+ const page=await browser.newPage();
+ await page.exposeFunction('readState',()=>structuredClone(saved));
+ await page.exposeFunction('writeState',value=>Object.assign(saved,structuredClone(value)));
+ await page.exposeFunction('rpc',message=>{messages.push(message);if(message.type==='SAVE_NOTIFICATION_SETTINGS')saved.notificationSettings={sound:message.sound};if(message.type==='TEST_NOTIFICATION'){const detail=notificationTestStatus==='requested'?'Chrome에 알림 요청을 보냈습니다.':'Chrome에서 알림이 차단되어 있습니다.';saved.notificationDiagnostics={status:notificationTestStatus,detail,kind:'test'};return {ok:notificationTestStatus==='requested',status:notificationTestStatus,detail};}if(message.type==='SAVE_SCHEDULE_DRAFT')saved.scheduleDraft=structuredClone(message.draft);if(message.type==='SETUP_START')saved.setup={active:true,scope,tabId:7};return {ok:true};});
+ await page.exposeFunction('tabRpc',message=>{messages.push(message);return message.type==='INSPECT_FORM' ? reply : {ok:true};});
+ await page.addInitScript(()=>{window.chrome={storage:{local:{get:()=>window.readState(),set:value=>window.writeState(value)},onChanged:{addListener(fn){window.refresh=fn;}}},runtime:{sendMessage:message=>window.rpc(message)},tabs:{query:async()=>[{id:7,url:'https://booking.naver.com/booking/6/bizes/77605/items/4221135'}],sendMessage:(id,message)=>window.tabRpc(message)}};});
+ await page.route('https://extension.test/**',async route=>{
+  const pathname=new URL(route.request().url()).pathname.slice(1),type=pathname.endsWith('.js')?'text/javascript':pathname.endsWith('.css')?'text/css':pathname.endsWith('.png')?'image/png':'text/html; charset=utf-8';
+  await route.fulfill({body:await readFile(new URL(pathname,root)),contentType:type});
+ });
+ await page.goto('https://extension.test/popup.html');await page.waitForFunction(()=>document.querySelector('input[name="date"]')?.value==='2026-10-16');return page;
+}
+try{
+ let page=await open();
+ assert.equal(await page.locator('[id^="apply-"], .manual-tools, #save-party, #save-stage, #save-fields').count(),0);
+ assert.equal(await page.locator('input[name$="Selector"]').count(),0);
+ assert.equal(await page.locator('#notification-sound').inputValue(),'alert');
+ await page.locator('#notification-sound').selectOption('bell');
+ await page.waitForFunction(()=>document.querySelector('#sound-status').textContent.includes('저장했습니다'));
+ await page.locator('#preview-notification-sound').click();await page.waitForFunction(()=>document.querySelector('#sound-status').textContent.includes('재생했습니다'));
+ assert.ok(messages.some(m=>m.type==='PREVIEW_NOTIFICATION_SOUND' && m.sound==='bell'));assert.deepEqual(saved.job,job);
+ await page.locator('#add-date').click();await page.locator('#date-fields input').nth(1).fill('2026-10-23');
+ await page.locator('#time-picker').fill('14:00');await page.locator('#add-time').click();
+ await page.locator('.time-chip').filter({hasText:'17:00'}).click();
+ await page.waitForFunction(()=>document.querySelector('#schedule-save-status').textContent.includes('자동 저장'));
+ assert.deepEqual(saved.scheduleDraft.dates,['2026-10-16','2026-10-23']);assert.deepEqual(saved.scheduleDraft.times,['14:00']);
+ assert.equal(messages.some(message=>message.type==='START'),false);assert.deepEqual(saved.job,job);
+ await page.close();page=await open();
+ assert.equal(await page.locator('#notification-sound').inputValue(),'bell');
+ await page.locator('#notification-sound').selectOption('none');assert.equal(await page.locator('#preview-notification-sound').isDisabled(),true);
+ assert.equal(await page.locator('#date-fields input').count(),2);assert.equal(await page.locator('.time-chip').first().textContent(),'14:00 ×');
+ await page.locator('select[name="timeMode"]').selectOption('range');await page.locator('input[name="timeStart"]').fill('13:30');await page.locator('input[name="timeEnd"]').fill('15:30');await page.locator('.remove-date').click();
+ await page.waitForFunction(()=>document.querySelector('#schedule-save-status').textContent.includes('자동 저장'));
+ assert.equal(saved.scheduleDraft.timeStart,'13:30');assert.equal(saved.scheduleDraft.timeEnd,'15:30');assert.deepEqual(saved.scheduleDraft.dates,['2026-10-16']);
+ await page.close();page=await open();
+ assert.equal(await page.locator('select[name="timeMode"]').inputValue(),'range');assert.equal(await page.locator('input[name="timeStart"]').inputValue(),'13:30');assert.equal(await page.locator('input[name="timeEnd"]').inputValue(),'15:30');
+ assert.equal(await page.locator('#date-fields input').count(),1);assert.deepEqual(saved.job,job);
+ reply={ok:true,scope,stage:'composition',people:2,fields:[{label:'성인',type:'number',value:'2'},{label:'어린이',type:'number',value:'0'}]};
+ await page.evaluate(()=>document.querySelector('#inspect-form').click());await page.locator('#save-settings').waitFor();await page.locator('#save-settings').click();
+ await page.waitForFunction(()=>window.chrome.storage.local.get().then(state=>!!state.partyProfiles));
+ assert.equal(saved.partyProfiles[scope].counts[0].count,2);
+ reply={ok:true,scope,stage:'final',fields:[{key:'field:요청사항',label:'요청사항',type:'text',value:'',options:[]}]};
+ await page.evaluate(()=>document.querySelector('#inspect-form').click());await page.locator('#form-fields input').fill('창가 요청');await page.locator('#save-settings').click();
+ await page.waitForFunction(()=>window.chrome.storage.local.get().then(state=>!!state.formProfiles));assert.equal(saved.formProfiles[scope].fields[0].value,'창가 요청');
+ reply={ok:true,scope,stage:'options',stageKey:'new',title:'수량',fields:[{key:'quantity:tent',label:'텐트',type:'quantity',value:'1',required:true,options:[]}]};
+ await page.evaluate(()=>document.querySelector('#inspect-form').click());await page.locator('#stage-fields input').fill('2');await page.locator('#save-settings').click();
+ await page.waitForFunction(()=>window.chrome.storage.local.get().then(state=>!!state.stageProfiles));assert.equal(saved.stageProfiles[scope].stages.new.fields[0].value,'2');
+ assert.equal(saved.formProfiles[scope].fields[0].value,'창가 요청');assert.equal(saved.partyProfiles[scope].counts[0].count,2);
+ await page.locator('#party-count-fields input').nth(0).fill('1');await page.locator('#party-count-fields input').nth(1).fill('1');await page.locator('#save-settings').click();
+ await page.waitForFunction(()=>window.chrome.storage.local.get().then(state=>state.partyProfiles?.[Object.keys(state.partyProfiles)[0]]?.counts[0].count===1));
+ assert.equal(saved.stageProfiles[scope].stages.new.fields[0].value,'2');
+ await page.locator('#form-fields input').fill('새 요청');await page.locator('#save-settings').click();
+ await page.waitForFunction(()=>window.chrome.storage.local.get().then(state=>state.formProfiles?.[Object.keys(state.formProfiles)[0]]?.fields[0].value==='새 요청'));
+ assert.equal(saved.partyProfiles[scope].counts[0].count,1);
+ await page.locator('#start-setup').click();
+ reply={ok:true,scope,stage:'composition',people:2,fields:[{label:'성인',type:'number',value:'2'},{label:'어린이',type:'number',value:'0'}]};
+ saved.setup.currentStep={...reply,stageKey:'composition',title:'인원 구성'};await page.evaluate(()=>window.refresh());await page.locator('#setup-next').waitFor();assert.equal(await page.locator('#save-settings').isVisible(),false);
+ await page.locator('#setup-next').click();await page.waitForFunction(()=>document.querySelector('#inspect-status').textContent.includes('현재 단계를 저장했습니다'));assert.ok(messages.some(message=>message.type==='SETUP_NEXT'));
+ reply={ok:true,scope,stage:'final',fields:[{key:'field:요청사항',label:'요청사항',type:'text',value:'',options:[]}]};
+ saved.setup.currentStep={...reply,stageKey:'final',title:'최종 신청'};await page.evaluate(()=>window.refresh());await page.locator('#save-settings').waitFor();assert.equal(await page.locator('#setup-next').isVisible(),false);
+ assert.equal(await page.locator('#inspect-form').isVisible(),false);
+ await page.locator('#form-fields input').fill('편집 유지');await page.evaluate(()=>window.refresh());assert.equal(await page.locator('#form-fields input').inputValue(),'편집 유지');
+ saved.setup={...saved.setup,currentStep:null,error:'화면 감지 실패'};await page.evaluate(()=>window.refresh());await page.locator('#inspect-form').waitFor();
+ assert.equal(messages.some(message=>message.type.startsWith('APPLY_')),false);
+ saved.setup={active:false,scope};saved.partyProfiles={};saved.stageProfiles={};
+ saved.setupProfiles={[scope]:{complete:true,steps:[{stage:'final',stageKey:'final',title:'최종 신청',fields:reply.fields}]}};
+ await page.evaluate(()=>window.refresh());
+ await page.waitForFunction(()=>document.querySelector('#saved-stages').textContent==='중간 단계 없음 · 최종 신청 항목 저장됨');
+ assert.equal(await page.locator('#saved-stages').isVisible(),true);
+ await page.close();page=await open();
+ await page.waitForFunction(()=>document.querySelector('#saved-stages').textContent==='중간 단계 없음 · 최종 신청 항목 저장됨');
+ saved.formProfiles={};saved.setupProfiles[scope].steps[0].fields=[{key:'agree',type:'checkbox',required:true,label:'동의',options:[{value:'on',label:'확인'}]}];
+ await page.evaluate(()=>window.refresh());
+ await page.waitForFunction(()=>document.querySelector('#saved-stages').textContent==='중간 단계 없음 · 최종 신청 항목 자동 처리');
+ saved.partyProfiles={[scope]:{scope,counts:[{label:'성인',count:2}]}};
+ saved.setupProfiles[scope].steps.unshift({stage:'composition',stageKey:'composition',title:'인원 구성',fields:[{label:'성인',type:'number'}]});
+ await page.evaluate(()=>window.refresh());
+ await page.waitForFunction(()=>document.querySelector('#saved-stages').textContent==='중간 단계 설정 1개 저장됨 · 최종 신청 항목 자동 처리');
+ const jobBeforeTest=structuredClone(saved.job),startsBeforeTest=messages.filter(m=>m.type==='START').length;
+ await page.locator('summary').filter({hasText:'알림이 안 보이나요?'}).click();
+ await page.locator('#test-notification').click();
+ await page.waitForFunction(()=>document.querySelector('#notification-status').textContent.includes('Chrome에 알림 요청'));
+ assert.deepEqual(saved.job,jobBeforeTest);assert.equal(messages.filter(m=>m.type==='START').length,startsBeforeTest);
+ notificationTestStatus='blocked';await page.locator('#test-notification').click();
+ await page.waitForFunction(()=>document.querySelector('#notification-status').classList.contains('field-error'));
+ assert.match(await page.locator('#notification-status').textContent(),/차단/);
+ await page.close();page=await open();
+ await page.waitForFunction(()=>document.querySelector('#notification-status').textContent.includes('차단'));
+ assert.deepEqual(saved.job,jobBeforeTest);
+ reply={ok:true,scope,stage:'final',fields:[
+  {key:'wide',label:'긴 필수 항목 설명 '.repeat(30),type:'text',value:'',options:[]},
+  {key:'notes',label:'추가 요청',type:'textarea',value:'',options:[]},
+  {key:'choice',label:'선택',type:'select',value:'',options:[{value:'a',label:'긴 선택지 '.repeat(50)}]}
+ ]};
+ await page.evaluate(()=>document.querySelector('#inspect-form').click());
+ await page.waitForFunction(()=>document.querySelector('#form-fields textarea'));
+ await page.locator('#form-scope').evaluate(el=>el.textContent='https://booking.naver.com/'+ 'long-product-path/'.repeat(20));
+ for(const width of [80,320,452,800]) {
+  await page.setViewportSize({width,height:700});
+  const layout=await page.evaluate(()=>({root:document.documentElement.getBoundingClientRect().width,body:document.body.getBoundingClientRect().width,titleHeight:document.querySelector('h1').getBoundingClientRect().height,overflow:[...document.querySelectorAll('fieldset,legend,input,select,textarea,button,summary')].filter(el=>el.getClientRects().length).map(el=>({tag:el.tagName,right:el.getBoundingClientRect().right,left:el.getBoundingClientRect().left})).filter(r=>r.right>452 || r.left<0)}));
+  assert.equal(layout.body,420,JSON.stringify(layout));assert.equal(layout.root,452);assert.ok(layout.titleHeight<44,JSON.stringify(layout));assert.deepEqual(layout.overflow,[]);
+ }
+ await page.setViewportSize({width:452,height:700});
+ if(process.env.POPUP_SCREENSHOT)await page.screenshot({path:process.env.POPUP_SCREENSHOT,fullPage:true});
+ console.log('PASS popup: manual actions removed; one save handles all three profiles, guided next replaces save; schedule drafts persist without START or changing the watcher');
+}finally{await browser.close();}
